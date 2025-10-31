@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "timetable-bot"
+version = "0.1.0"
+description = ""
+authors = ["Denis Bakulin <dtorkon@yandex.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+httpx = "^0.28.1"
+aiogram = "^3.22.0"
+sqlalchemy = "^2.0.44"
+pydantic-settings = "^2.11.0"
+aiosqlite = "^0.21.0"
+redis = "^6.4.0"
+apscheduler = "^3.11.0"
+beautifulsoup4 = "^4.14.2"
+lxml = "^6.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

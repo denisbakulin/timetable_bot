@@ -1,0 +1,32 @@
+from pydantic import BaseModel, Field
+
+
+class SubLesson(BaseModel):
+    name: str
+    type: str
+    teacher: str
+    place: str
+    subgroup: str | None = None
+
+
+
+class Lesson(BaseModel):
+    start: str
+    end: str
+    sub_lessons: list[SubLesson] = Field(default_factory=list)
+
+
+class Day(BaseModel):
+    name: str
+    today: bool
+    lessons: list[Lesson] = Field(default_factory=list)
+
+
+class Week(BaseModel):
+    days: list[Day] = Field(default_factory=list)
+    number: int
+
+
+class TimeTableResponse(BaseModel):
+    group_name: str
+    weeks: list[Week] = Field(default_factory=list)

@@ -1,0 +1,16 @@
+# Cache files
+__pycache__/
+
+# Project files
+.idea/
+*.log
+.env
+venv
+.venv/
+*.session
+bot.db
+poetry.lock
+
+# vscode
+.vscode/
+.history/
