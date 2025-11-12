@@ -16,6 +16,7 @@ redis = "^6.4.0"
 apscheduler = "^3.11.0"
 beautifulsoup4 = "^4.14.2"
 lxml = "^6.0.2"
+uvicorn = "^0.38.0"
 
 
 [build-system]

@@ -1,86 +1,59 @@
 import asyncio
+from json import dumps, loads
 
 from httpx import AsyncClient, ConnectError
-
 from redis import asyncio as aioredis
-from json import loads, dumps
-from datetime import date, time
-from app.db.base import session_maker, GroupService
-from app.client.serialize import Week, Day, TimeTableResponse
+
+from app.client.formatter import format_day,  weekdays, format_week
+from app.client.parser import parse_timetable
+from app.client.serialize import TimeTableResponse, Week, Day
+from app.db.user import UserService
+from app.db.group import GroupService
 
 from app.settings import bot_settings
-from app.client.parser import parse_timetable
 
 
-cache = aioredis.from_url(url='redis://localhost', port=6379, decode_responses=True)
+cache = aioredis.from_url(
+    url=bot_settings.cache_url,
+    port=bot_settings.cache_port,
+    decode_responses=True
+)
 
-lessons_start = {
-    "08:00": 1,
-    "09:40": 2,
-    "11:30": 3,
-    "13:30": 4,
-    "15:10": 5,
-    "16:50": 6,
-    "18:30": 7,
-    "20:10": 8
-}
+from datetime import datetime
 
 
-def format_day(day: Day, today=False) -> str:
+def get_current_week(tt: TimeTableResponse) -> Week:
+    today = datetime.now().weekday()
 
-    # Заголовок дня
-    header = f"📅 <b>{day.name}</b>\n" + "═" * 20 + "\n" if not today else \
-             f"<b>⭐️ Сегодня - {date.today().strftime("%d/%m %Y")}</b>"
+    pallada_today = datetime.strptime(tt.date_, "%d.%m.%Y").weekday()
 
-    if not day.lessons:
-        return f"{header}\n❌ Занятий нет"
+    if pallada_today == 6 and today == 0:
+        return next((week for week in tt.weeks if not week.current), None)
 
-    result = [header]
-
-    for i, lesson in enumerate(day.lessons, start=1):
-
-        # Эмодзи номера пары
-        num_emoji = f"{lessons_start[lesson.start]}\uFE0F\u20E3" if i <= 9 else f"{i}⃣"
-
-        # Заголовок пары
-        result.append(f"\n{num_emoji} <b>{lesson.start} - {lesson.end}</b>")
-
-        if not lesson.sub_lessons:
-            result.append("  • Нет данных о занятии\n")
-            continue
+    return next((week for week in tt.weeks if week.current), None)
 
 
-
-        for sub_lesson in lesson.sub_lessons:
-            subgroup = f"{sub_lesson.subgroup + ' Подгруппа' if sub_lesson.subgroup else ''}"
-
-            block = f"<b>{sub_lesson.name} {subgroup}</b>"
-
-            if sub_lesson.type:
-                block += f" <i>({sub_lesson.type})</i>"
-
-            if sub_lesson.teacher:
-                block += f"\n👨‍🏫 {sub_lesson.teacher}"
-
-            if sub_lesson.place:
-                block += f"\n🏫 {sub_lesson.place}\n"
-
-            result.append(block)
-
-        # разделитель между парами
-        result.append("────────────────────")
-
-    return "\n".join(result).strip()
-
-def format_week(week: Week) -> str:
-    res = []
-
-    for day in week.days:
-        res.append(format_day(day))
-        res.append(f"\n\n\n")
-    return f"📅{week.number}-я Неделя\n\n" + "".join(res).strip()
+def get_today(tt: TimeTableResponse) -> Day | None:
+    current_week = get_current_week(tt)
+    if not current_week:
+        return None
+    today_week_name = weekdays[datetime.now().weekday()]
+    return next((day for day in current_week.days if day.name == today_week_name), None)
 
 
+def get_tomorrow(tt: TimeTableResponse) -> Day | None:
+    tomorrow = datetime.now().weekday() + 1
+
+    if tomorrow == 7:
+        next_week = next((week for week in tt.weeks if not week.current), None)
+        if next_week is None:
+            return None
+        next((day for day in next_week.days if day.name == weekdays[0]), None)
+
+    week = get_current_week(tt)
+    if week is None:
+        return None
+    return next((day for day in week.days if day.name == weekdays[tomorrow]), None)
 
 class PalladaClient:
 
@@ -105,41 +78,60 @@ class PalladaClient:
                 return request_
 
         except ConnectError as e:
-            print(e)
             return None
+
         except Exception as e:
-            print(e)
             return None
 
+    def update_timetable_task(self, all_: bool = False):
+        async def wrapper():
+            if all_:
+                groups = await GroupService().get_any_by()
+                groups = [group.name for group in groups]
+            else:
+                groups = await UserService().get_user_groups()
 
-    async def _get_timetable(self, group_name) -> TimeTableResponse:
+            for group in groups:
+                await self._get_timetable(group, force=True)
+                await asyncio.sleep(0.5)
+        return wrapper
+
+
+    async def _get_timetable(self, group_name, force: bool = False) -> TimeTableResponse | None:
         group_name = group_name.upper()
         cached = await cache.get(group_name)
 
-        if cached:
+        if cached and not force:
             return TimeTableResponse(**loads(cached))
 
         group = await GroupService().get_one_by(name=group_name)
+
+        if not group:
+            return None
+
         response = await self.request(f"/group/{group.pallada_id}")
 
         if response is None:
+            if group.timetable is not None:
+                return TimeTableResponse(**loads(group.timetable))
             return None
 
         timetable = parse_timetable(response.text)
 
-        await cache.set(
-            group_name, dumps(timetable.dict()),
-            ex=bot_settings.timetable_update_time_seconds
-        )
+        if not force:
+            await cache.set(
+                group_name, dumps(timetable.model_dump()),
+                ex=bot_settings.timetable_update_time_seconds
+            )
+
+        await GroupService().update(group.id, timetable=dumps(timetable.model_dump()))
+
 
         return timetable
 
+    async def other(self):
+        url = "https://www.sibsau.ru/sveden/common"
 
-
-
-    async def group_exists(self, name: str) -> bool:
-        group = await GroupService().get_one_by(name=name)
-        return bool(group)
 
 
     async def setup_groups(self, start_group_id: int, end_group_id: int):
@@ -161,43 +153,37 @@ class PalladaClient:
                     count += 1
                     await group_service.create(pallada_id=group_id, name=parse.group_name)
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.5)
 
         return count
-
-
-    async def get_week_timetable(
-            self,
-            group: str,
-            n: int = 0
-    ) -> tuple[Week, str]:
-        timetable = await self._get_timetable(group)
-
-        if not timetable or not timetable.weeks:
-            return (Week(number=-1), "Расписания нет!")
-
-        week = timetable.weeks[n]
-
-        return week, format_week(week)
 
     async def get_today_timetable(self, group_name: str):
         timetable = await self._get_timetable(group_name)
         if not timetable:
-            return "❌ Не удалось определить сегодняшний день"
+            return "Расписание сейчас недоступно 😬"
 
-        days = [day for week in timetable.weeks for day in week.days]
-        today = next((day for day in days if day.today), None)
+        today = get_today(timetable)
 
         if not today:
-            return "❌ Не удалось определить сегодняшний день"
+            return "❌ Не сегодняшний день занятий нет"
 
         return format_day(today, today=True)
+    async def get_tomorrow_timetable(self, group_name: str):
+        timetable = await self._get_timetable(group_name)
+        if not timetable:
+            return "Расписание сейчас недоступно 😬"
 
+        tomorrow = get_tomorrow(timetable)
+
+        if not tomorrow:
+            return "❌ Не завтрашний день занятий нет"
+
+        return format_day(tomorrow)
 
 
 
 async def main():
-    await PalladaClient().setup_groups( 14000, 15000)
+    print(await PalladaClient().get_week_timetable("БПИ25-01"))
 
 if __name__ == "__main__":
     asyncio.run(main())

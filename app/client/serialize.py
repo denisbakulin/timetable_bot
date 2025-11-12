@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 class SubLesson(BaseModel):
@@ -18,15 +19,16 @@ class Lesson(BaseModel):
 
 class Day(BaseModel):
     name: str
-    today: bool
     lessons: list[Lesson] = Field(default_factory=list)
 
 
 class Week(BaseModel):
     days: list[Day] = Field(default_factory=list)
     number: int
+    current: bool
 
 
 class TimeTableResponse(BaseModel):
     group_name: str
+    date_: str
     weeks: list[Week] = Field(default_factory=list)

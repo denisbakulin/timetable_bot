@@ -1,0 +1,52 @@
+services:
+  bot:
+    container_name: bot
+    build: .
+    depends_on:
+      - cache
+    env_file:
+      - .env
+    volumes:
+      - db:/bot/app/bot.db
+    restart: always
+    networks:
+      - bot-network
+
+  redis:
+    image: redis
+    container_name: cache
+    restart: always
+    ports:
+      - "6279:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot-network
+
+  nginx:
+      image: nginx:alpine
+      container_name: nginx
+      restart: unless-stopped
+      ports:
+        - "80:80"
+        - "443:443"
+      volumes:
+        - ./nginx.conf:/etc/nginx/nginx.conf
+      environment:
+        - HOST=${HOST}
+
+      depends_on:
+        - bot
+      networks:
+        - internet
+        - bot-network
+
+volumes:
+  bot_data:
+  redis_data:
+
+networks:
+  bot-network:
+    driver: bridge
+  internet:
+    driver: bridge

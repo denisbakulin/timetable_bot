@@ -1,8 +1,17 @@
-from bs4 import BeautifulSoup
-import httpx
-from app.client.serialize import TimeTableResponse,Week, Day, Lesson, SubLesson
-
 import re
+
+from bs4 import BeautifulSoup
+
+from app.client.serialize import (Day, Lesson, SubLesson, TimeTableResponse,
+                                  Week)
+from datetime import datetime
+
+def format_place(place: str) -> str:
+    to_remove = ["корп.", "каб.", '"']
+    for i in to_remove:
+        place = place.replace(i, "")
+    return place
+
 def parse_timetable(timetable_html) -> TimeTableResponse:
     bs = BeautifulSoup(timetable_html, "lxml")
 
@@ -13,16 +22,31 @@ def parse_timetable(timetable_html) -> TimeTableResponse:
 
     weeks = bs.find_all("div", id=re.compile(r'^week_\d+_tab'))
 
-    timetable = TimeTableResponse(group_name=group_name)
+    week_tab = [week.parent.get("class") for week in bs.find_all(
+        "a",
+        attrs={
+            "data-toggle": "tab",
+            "href": re.compile(r'#week_\d+_tab')
+        }
+    )]
+
+    current_week = 0
+
+    for idx, week_class in enumerate(week_tab):
+        if "active" in week_class:
+            current_week = idx
+
+    date_ = bs.find("h4").text.replace(" ", "").split("-")[0].strip()
+    timetable = TimeTableResponse(group_name=group_name, date_=date_)
 
     for number, week in enumerate(weeks):
         days = week.find_all("div", class_="day")
-        week = Week(number=number)
+        week = Week(number=number, current=number == current_week)
 
         for day in days:
             title = day.find("div", class_="header").find("div", class_="name").text.strip().split()
             lessons = day.find("div", class_="body").find_all("div", class_="line")
-            day = Day(name=title[0], today=len(title) == 2)
+            day = Day(name=title[0])
 
             for lesson in lessons:
                 start, end = (time.strip() for time in
@@ -51,12 +75,12 @@ def parse_timetable(timetable_html) -> TimeTableResponse:
                     name = ul.find("span", class_="name").text
                     type_ = ul.find("i", class_="fa fa-bookmark").parent.contents[2].text.strip()[1:-1]
                     teacher = ul.find("i", class_="fa fa-user").next_element.text
-                    place = ul.find("i", class_="fa fa-compass").next_element.text.replace('"', "")
+                    place = ul.find("i", class_="fa fa-compass").next_element.text
 
 
                     sub_lesson = SubLesson(
                         name=name, type=type_, teacher=teacher,
-                        place=place, subgroup=subgroup
+                        place=format_place(place), subgroup=subgroup
                     )
 
                     lesson.sub_lessons.append(sub_lesson)
@@ -64,7 +88,6 @@ def parse_timetable(timetable_html) -> TimeTableResponse:
             week.days.append(day)
         timetable.weeks.append(week)
 
-    print(timetable)
     return timetable
 
 

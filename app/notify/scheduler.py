@@ -1,37 +1,29 @@
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
-from app.settings import bot_settings
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from app.client.api import PalladaClient
-from app.db.base import UserService
+from app.db.user import UserService
 from app.keyboards.kb import main_menu_kb
-import asyncio
+from app.settings import bot_settings
 
 scheduler = AsyncIOScheduler()
 
 
 class NotificationManager:
-    def __init__(self):
-        self._bot = None
-
-    @property
-    def bot(self) -> Bot:
-        if self._bot is None:
-            self._bot = Bot(token=bot_settings.token)
-        return self._bot
 
     def create_task(self, tg_id: int):
 
 
         async def wrapper():
-            # Создаем нового бота для каждой задачи
             bot = Bot(token=bot_settings.token)
-
-
 
             user = await UserService().get_user_by_tg_id(tg_id)
 
             timetable_client = PalladaClient()
-            timetable = await timetable_client.get_today_timetable(user.group)
+            timetable = await timetable_client.get_today_timetable(user.group.name)
+
+            if not user.subscribe:
+                return None
 
             if timetable:
                 await bot.send_message(
@@ -45,6 +37,7 @@ class NotificationManager:
                 await bot.send_message(
                     tg_id,
                     "🔔 Уведомление | На сегодня расписания нет или временная ошибка",
+                    parse_mode="HTML",
                     reply_markup=main_menu_kb
                 )
                 print(f"ℹ️  Пользователю {tg_id} отправлено сообщение об отсутствии расписания")
@@ -54,10 +47,16 @@ class NotificationManager:
 
         return wrapper
 
-    async def close(self):
-        if self._bot:
-            await self._bot.session.close()
+    async def setup_notify(self):
+        users = await UserService().get_any_by()
 
+        for user in users:
+            scheduler.add_job(
+                notification_manager.create_task(user.tg_id),
+                "cron",
+                hour=user.notify_time.hour,
+                minute=user.notify_time.minute,
+                id=str(user.tg_id), replace_existing=True
+            )
 
-# Глобальный экземпляр
 notification_manager = NotificationManager()

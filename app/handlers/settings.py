@@ -1,15 +1,17 @@
 from datetime import datetime
 
 from aiogram import F, Router
-from aiogram.filters import StateFilter, Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from app.handlers.timetable import process_user_timetable
 
-from app.client.api import PalladaClient
-from app.data import SETTINGS_TEXT
-from app.db.base import  UserService, UserSchema
+from app.data import SETTINGS_TEXT, CHANGE_GROUP_TEXT
+from app.db.user import UserService, UserSchema
+from app.db.group import GroupService
 from app.fsm.default import Waiting
-from app.keyboards.kb import cancel_kb, create_settings_kb, main_timetable_kb, main_menu_kb
+from app.keyboards.kb import (cancel_kb, create_settings_kb,
+                              main_timetable_kb)
 
 router = Router()
 
@@ -17,15 +19,12 @@ router = Router()
 async def send_format_settings_message(
         message: Message,
         user: UserSchema,
-        new: bool = False
 ):
-    func = message.answer if new else message.edit_text
-
-    await func(SETTINGS_TEXT.format(
+    await message.edit_text(SETTINGS_TEXT.format(
         subscription_status="✅" if user.subscribe else "❌",
         group=user.group,
         notify_time=user.notify_time
-    ), reply_markup=create_settings_kb(user), parse_mode="HTML")
+    ), reply_markup=create_settings_kb(user))
 
 
 @router.callback_query(F.data == "settings")
@@ -34,16 +33,10 @@ async def settings_callback(callback: CallbackQuery):
 
     await send_format_settings_message(callback.message, user)
 
-@router.message(Command("settings"))
-async def settings_cmd(message: Message):
-    user = await UserService().get_user_by_tg_id(message.from_user.id)
-
-    await send_format_settings_message(message, user, new=True)
-
 
 @router.callback_query(F.data == "subscribe")
 async def process_subscribe(callback: CallbackQuery):
-    await callback.answer()
+
     user = await UserService().process_subscribe(callback.from_user.id)
 
     await send_format_settings_message(callback.message, user)
@@ -55,7 +48,6 @@ async def get_timetable(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Waiting.notify_time)
 
 from app.notify.scheduler import notification_manager, scheduler
-
 
 
 @router.message(StateFilter(Waiting.notify_time))
@@ -87,28 +79,30 @@ async def get_notify_time(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "change_group")
 async def change_group(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
     await state.set_state(Waiting.group)
-    await callback.message.answer("Напишите вашу группу", reply_markup=cancel_kb)
+
+    await callback.message.answer(
+        CHANGE_GROUP_TEXT,
+        reply_markup=cancel_kb
+    )
 
 
 @router.message(StateFilter(Waiting.group))
 async def set_group(message: Message, state: FSMContext):
-    group_exists = await PalladaClient().group_exists(message.text.upper())
+    group = await GroupService().get_one_by(name=message.text.upper())
 
-    if not group_exists:
+    if group is None:
         return await message.reply(
             "Группа не найдена, попробуйте еще раз",
             reply_markup=cancel_kb
         )
 
     user = await UserService().get_user_by_tg_id(message.from_user.id)
-    user = await UserService().update(user.id, group=message.text.upper())
+    user = await UserService().update(user.id, pallada_id=group.pallada_id)
 
-    await message.answer(
-        f"⌛ Расписание для группы {user.group}",
-        reply_markup=main_timetable_kb, parse_mode="HTML"
-    )
+    await message.reply("✅ Текущая группа установлена!")
+    await process_user_timetable(message, user, state, new=True)
+
     await state.clear()
 
 

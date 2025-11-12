@@ -2,13 +2,19 @@ from logging import getLogger
 
 from aiogram import Bot
 from aiogram.filters import BaseFilter
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 l = getLogger()
 
 class IsAdminFilter(BaseFilter):
     async def __call__(self, message: Message, bot: Bot) -> bool:
         return message.from_user.id in bot.admins
+
+
+class AnswerCallback(BaseFilter):
+    async def __call__(self, callback: CallbackQuery, *args, **kwargs):
+        await callback.answer()
+        return True
 
 
 
@@ -18,6 +24,7 @@ class ChatTypeFilter(BaseFilter):
 
     async def __call__(self, message: Message):
         return message.chat.type in self.chat_types
+
 
 class ReplyFeedbackMessage(BaseFilter):
     async def __call__(self, m: Message, bot: Bot):
@@ -32,3 +39,4 @@ class ReplyFeedbackMessage(BaseFilter):
             return False
 
         return parse[0].isdigit()
+

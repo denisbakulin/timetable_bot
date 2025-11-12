@@ -1,16 +1,19 @@
+from aiogram.filters.callback_data import CallbackData
 from aiogram.types import (BotCommand, InlineKeyboardButton,
                            InlineKeyboardMarkup)
-from aiogram.filters.callback_data import CallbackData
-from app.client.api import Week
+
+from app.client.api import Week, Day
+from app.client.formatter import weekdays
+
+from datetime import datetime
+
 
 cmd_list = [
-    ("/start", "Начать"),
     ("/menu", "Главное меню"),
     ("/today", "Расписание на сегодня"),
-    ("/timetable", "Расписание"),
-    ("/settings", "Настройки"),
+    ("/tomorrow", "Расписание на завтра"),
     ("/feedback", "Обратная связь"),
-    ("/admin", "Админка"),
+    ("/about", "О проекте")
 ]
 
 
@@ -54,7 +57,7 @@ main_menu_kb = InlineKeyboardMarkup(
 menu_kb = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text="🕒 Расписание", callback_data="timetable")],
-        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")]
+        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
     ]
 )
 
@@ -64,7 +67,6 @@ cmd_menu = [
 ]
 
 
-from datetime import datetime
 class TimetableCallback(CallbackData, prefix="timetable"):
     action: str
     n: int | None = None
@@ -78,6 +80,7 @@ def create_tt_kb(
         callback_data: TimetableCallback
 ) -> InlineKeyboardMarkup:
     callback_data.updated = int(datetime.now().timestamp())
+
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(
@@ -93,20 +96,30 @@ def create_tt_kb(
 
 
 
-days = {
-    'Понедельник': 0,
-    'Вторник': 1,
-    'Среда': 2,
-    'Четверг': 3,
-    'Пятница': 4,
-    'Суббота': 5,
-    'Воскресенье': 6
-}
+def format_week_day_name(week: Week, day: Day) -> str:
+    if not week.current:
+        return day.name
 
+    if day.name == weekdays[datetime.now().weekday()]:
+        return f"⭐️ {day.name}"
+
+    return day.name
 
 def create_week_kb(week: Week, callback_data):
 
-    # Кнопка "Все расписание" с выравниванием
+
+    days = [
+        [InlineKeyboardButton(
+            text=format_week_day_name(week, day),
+            callback_data=TimetableCallback(
+                action="week",
+                day=day.name,
+                n=week.number
+            ).pack())]
+        for day in week.days
+    ]
+
+    # Кнопка "Все расписание"
     all_week = [[InlineKeyboardButton(
         text="📊 Все расписание",
         callback_data=TimetableCallback(
@@ -116,27 +129,19 @@ def create_week_kb(week: Week, callback_data):
         ).pack()
     )]]
 
-    # Кнопки дней с выравниванием
-    kb = [
-        [InlineKeyboardButton(
-            text=day.name,
-            callback_data=TimetableCallback(
-                action="week",
-                day=day.name,
-                n=week.number
-            ).pack())]
-        for day in week.days
-    ]
+
 
     week_kb = InlineKeyboardMarkup(
-        inline_keyboard=kb + all_week + create_tt_kb(callback_data).inline_keyboard
+        inline_keyboard=days + all_week + create_tt_kb(callback_data).inline_keyboard
     )
 
     return week_kb
 
 main_timetable_kb = InlineKeyboardMarkup(
     inline_keyboard=[
-        [InlineKeyboardButton(text="✨ Сегодня", callback_data=TimetableCallback(action="today").pack())],
+        [InlineKeyboardButton(text="✨ Сегодня", callback_data=TimetableCallback(action="today").pack()),
+         InlineKeyboardButton(text="🕒 Завтра", callback_data=TimetableCallback(action="tomorrow").pack())],
+
         [InlineKeyboardButton(text="📋 1-я неделя", callback_data=TimetableCallback(action="week", n=0).pack()),
          InlineKeyboardButton(text="📋 2-я неделя", callback_data=TimetableCallback(action="week", n=1).pack())],
         [InlineKeyboardButton(text="🏠 Главная", callback_data=TimetableCallback(action="cancel").pack())]
