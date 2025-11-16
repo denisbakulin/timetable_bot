@@ -1,6 +1,10 @@
+
+
+
 FROM python:3.12-slim
 
 WORKDIR /app
+
 
 RUN pip install --no-cache-dir poetry
 
@@ -12,8 +16,4 @@ RUN poetry install --no-interaction --no-ansi --no-root
 
 COPY . .
 
-WORKDIR /app
-ENV PYTHONPATH="/app"
-ENV PYTHONUNBUFFERED=1
-# Запускаем из папки app
-CMD ["python", "/app/app/main.py"]
+CMD ["python", "-m", "app.main"]

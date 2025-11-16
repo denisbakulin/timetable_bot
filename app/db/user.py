@@ -1,7 +1,8 @@
 from sqlalchemy import ForeignKey, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.group import GroupSchema, Group
+from app.db.group import Group, GroupSchema
+
 from datetime import time
 from app.db.base import BaseORM, BaseSchema, BaseRepository, BaseService
 
@@ -35,6 +36,7 @@ class UserRepository(BaseRepository[User]):
         super().__init__(session, User)
 
     async def get_user_groups(self):
+
         stmt = (
             select(Group.name)
             .join(User, User.pallada_id == Group.pallada_id)
