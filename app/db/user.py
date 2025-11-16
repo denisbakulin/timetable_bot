@@ -17,6 +17,7 @@ class User(BaseORM):
 
     pallada_id: Mapped[int | None] = mapped_column(ForeignKey("groups.pallada_id"))
     group: Mapped[str] = relationship("Group", lazy="joined")
+    subgroup: Mapped[int] = mapped_column(default=0)
 
     def __repr__(self):
         return f"Пользователь [Рассылка: {self.subscribe}, Группа: {self.group}]"
@@ -26,6 +27,7 @@ class UserSchema(BaseSchema):
     subscribe: bool
     group: GroupSchema | None
     notify_time: time
+    subgroup: int
 
 class UserRepository(BaseRepository[User]):
 

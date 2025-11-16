@@ -10,8 +10,8 @@ from app.data import SETTINGS_TEXT, CHANGE_GROUP_TEXT
 from app.db.user import UserService, UserSchema
 from app.db.group import GroupService
 from app.fsm.default import Waiting
-from app.keyboards.kb import (cancel_kb, create_settings_kb,
-                              main_timetable_kb)
+from app.keyboards.kb import (cancel_kb, create_settings_kb, main_menu_kb,
+                              main_timetable_kb, SubGroupCallback, change_subgroup_kb)
 
 router = Router()
 
@@ -23,7 +23,8 @@ async def send_format_settings_message(
     await message.edit_text(SETTINGS_TEXT.format(
         subscription_status="✅" if user.subscribe else "❌",
         group=user.group,
-        notify_time=user.notify_time
+        notify_time=user.notify_time,
+        subgroup=user.subgroup if user.subgroup else "🌐"
     ), reply_markup=create_settings_kb(user))
 
 
@@ -32,6 +33,33 @@ async def settings_callback(callback: CallbackQuery):
     user = await UserService().get_user_by_tg_id(callback.from_user.id)
 
     await send_format_settings_message(callback.message, user)
+
+@router.callback_query(F.data == "change_subgroup")
+async def sub_group_callback(
+        callback: CallbackQuery,
+):
+    await callback.message.answer(
+   "🧩 <b>Выберите подгруппу</b>\n\n"
+    "🌐 - расписание для всех подгрупп \n"
+        , reply_markup=change_subgroup_kb)
+
+@router.callback_query(SubGroupCallback.filter())
+async def sub_group_process(
+        callback: CallbackQuery,
+        callback_data: SubGroupCallback
+):
+    service = UserService()
+    user = await service.get_user_by_tg_id(callback.from_user.id)
+    user = await service.update(user.id, subgroup = callback_data.n)
+
+
+    if callback_data.n == 0:
+
+        msg = "✅ Выбраны все подгруппы"
+    else:
+        msg = f"✅ Выбрана подгруппа {callback_data.n}"
+
+    await callback.message.edit_text(msg,reply_markup=main_menu_kb)
 
 
 @router.callback_query(F.data == "subscribe")
@@ -68,6 +96,7 @@ async def get_notify_time(message: Message, state: FSMContext):
         )
 
         await message.reply(f"✅ Время уведомлений установлено на {message.text}!")
+
         await state.clear()
 
     except ValueError:

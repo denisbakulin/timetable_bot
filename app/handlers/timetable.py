@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.data import CHANGE_GROUP_TEXT
-from app.client.api import PalladaClient, format_day, get_current_week, get_today, weekdays
+from app.client.api import PalladaClient, format_day, get_current_week, weekdays
 from app.client.formatter import format_week
 from app.db.user import UserSchema, UserService
 from app.fsm.default import Waiting
@@ -22,6 +22,7 @@ async def cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.delete()
 
+
 async def process_user_timetable(message: Message, user: UserSchema, state: FSMContext, new: bool = False):
     if user.group is None:
         await state.set_state(Waiting.group)
@@ -32,7 +33,9 @@ async def process_user_timetable(message: Message, user: UserSchema, state: FSMC
         )
     else:
         func = message.answer if new else message.edit_text
-        tt = await PalladaClient()._get_timetable(user.group.name)
+        client = PalladaClient()
+        tt = await client._get_timetable(user.group.name)
+        tt = client.user_timetable(user, tt)
 
         if not tt or not tt.weeks:
             return await func(
@@ -63,13 +66,14 @@ async def cancel_timetable(callback: CallbackQuery):
 
 
 @router.message(Command("today"))
+@router.message(F.text.lower().in_(["седня", "сегодня"]))
 async def get_today_cmd(message: Message, state: FSMContext):
     user = await UserService().get_user_by_tg_id(message.from_user.id)
 
     if user.group is None:
         return await process_user_timetable(message, user, state, new=True)
 
-    timetable = await PalladaClient().get_today_timetable(user.group.name)
+    timetable = await PalladaClient().get_today_timetable(user)
 
     await message.answer(
         timetable,
@@ -77,13 +81,14 @@ async def get_today_cmd(message: Message, state: FSMContext):
     )
 
 @router.message(Command("tomorrow"))
+@router.message(F.text.lower() == "завтра")
 async def get_tomorrow_cmd(message: Message, state: FSMContext):
     user = await UserService().get_user_by_tg_id(message.from_user.id)
 
     if user.group is None:
         return await process_user_timetable(message, user, state, new=True)
 
-    timetable = await PalladaClient().get_tomorrow_timetable(user.group.name)
+    timetable = await PalladaClient().get_tomorrow_timetable(user)
 
     await message.answer(
         timetable,
@@ -97,7 +102,7 @@ async def get_today_callback(
 ):
 
     user = await UserService().get_user_by_tg_id(callback.from_user.id)
-    timetable = await PalladaClient().get_today_timetable(user.group.name)
+    timetable = await PalladaClient().get_today_timetable(user)
 
     await callback.message.edit_text(
         format_edited_message(timetable, callback_data.updated),
@@ -118,7 +123,7 @@ async def get_tomorrow_callback(
 ):
 
     user = await UserService().get_user_by_tg_id(callback.from_user.id)
-    timetable = await PalladaClient().get_tomorrow_timetable(user.group.name)
+    timetable = await PalladaClient().get_tomorrow_timetable(user)
 
     await callback.message.edit_text(
         format_edited_message(timetable, callback_data.updated),
@@ -127,7 +132,7 @@ async def get_tomorrow_callback(
 
 @router.callback_query(TimetableCallback.filter(F.action == "week"))
 async def get_week(
-        callback: TimetableCallback,
+        callback: CallbackQuery,
         callback_data: TimetableCallback
 ):
     user = await UserService().get_user_by_tg_id(callback.from_user.id)
@@ -135,11 +140,13 @@ async def get_week(
     client = PalladaClient()
 
     timetable = await client._get_timetable(user.group.name)
+    timetable = client.user_timetable(user, timetable)
 
     if not timetable or not timetable.weeks:
         week_timetable = None
     else:
         week_timetable = timetable.weeks[callback_data.n]
+        print(week_timetable.days[-1])
 
     if week_timetable is None:
         await callback.message.edit_text(
@@ -148,9 +155,6 @@ async def get_week(
         )
 
     elif callback_data.all:
-
-
-
         await callback.message.edit_text(
             format_edited_message(format_week(week_timetable), callback_data.updated),
             reply_markup=create_week_kb(week_timetable, callback_data)
@@ -159,7 +163,7 @@ async def get_week(
     elif callback_data.day:
         day = [day for day in week_timetable.days if day.name == callback_data.day][0]
         await callback.message.edit_text(
-            format_edited_message(format_day(day), callback_data.updated),
+            format_edited_message(f"🕘 {callback_data.n+1}-я Неделя, "+format_day(day).replace("📅", ""), callback_data.updated),
             reply_markup=create_week_kb(week_timetable, callback_data)
         )
     else:

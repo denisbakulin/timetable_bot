@@ -7,8 +7,9 @@ from redis import asyncio as aioredis
 from app.client.formatter import format_day,  weekdays, format_week
 from app.client.parser import parse_timetable
 from app.client.serialize import TimeTableResponse, Week, Day
-from app.db.user import UserService
+from app.db.user import UserService, UserSchema
 from app.db.group import GroupService
+
 
 from app.settings import bot_settings
 
@@ -48,12 +49,13 @@ def get_tomorrow(tt: TimeTableResponse) -> Day | None:
         next_week = next((week for week in tt.weeks if not week.current), None)
         if next_week is None:
             return None
-        next((day for day in next_week.days if day.name == weekdays[0]), None)
+        return next((day for day in next_week.days if day.name == weekdays[0]), None)
 
     week = get_current_week(tt)
     if week is None:
         return None
     return next((day for day in week.days if day.name == weekdays[tomorrow]), None)
+
 
 class PalladaClient:
 
@@ -96,8 +98,28 @@ class PalladaClient:
                 await asyncio.sleep(0.5)
         return wrapper
 
+    def process_subgroup(self, user, timetable) -> bool:
+        if timetable == "*" or timetable is None or user == 0:
+            return True
+        return str(user) == timetable
 
-    async def _get_timetable(self, group_name, force: bool = False) -> TimeTableResponse | None:
+    def user_timetable(self, user: UserSchema, tt: TimeTableResponse) -> TimeTableResponse | None:
+        if not tt:
+            return None
+
+        for week in tt.weeks:
+            for day in week.days:
+                for lesson in day.lessons:
+                    lesson.sub_lessons = [
+                        sub_lesson
+                        for sub_lesson in lesson.sub_lessons
+                        if self.process_subgroup(user.subgroup, sub_lesson.subgroup)
+                    ]
+        return tt
+
+
+
+    async def _get_timetable(self, group_name: str, force: bool = False) -> TimeTableResponse | None:
         group_name = group_name.upper()
         cached = await cache.get(group_name)
 
@@ -129,10 +151,6 @@ class PalladaClient:
 
         return timetable
 
-    async def other(self):
-        url = "https://www.sibsau.ru/sveden/common"
-
-
 
     async def setup_groups(self, start_group_id: int, end_group_id: int):
 
@@ -157,26 +175,37 @@ class PalladaClient:
 
         return count
 
-    async def get_today_timetable(self, group_name: str):
-        timetable = await self._get_timetable(group_name)
+    async def get_today_timetable(self, user: UserSchema):
+        timetable = await self._get_timetable(user.group.name)
+        timetable = self.user_timetable(user, timetable)
+
         if not timetable:
             return "Расписание сейчас недоступно 😬"
 
         today = get_today(timetable)
 
-        if not today:
-            return "❌ Не сегодняшний день занятий нет"
+        if not today or not self.day_have_lessons(today):
+            return "❌ На сегодняшний день занятий нет"
 
         return format_day(today, today=True)
-    async def get_tomorrow_timetable(self, group_name: str):
-        timetable = await self._get_timetable(group_name)
+    def day_have_lessons(self, day: Day) -> bool:
+        for lesson in day.lessons:
+            for sub in lesson.sub_lessons:
+                return True
+        return False
+
+
+    async def get_tomorrow_timetable(self, user: UserSchema):
+        timetable = await self._get_timetable(user.group.name)
+        timetable = self.user_timetable(user, timetable)
+
         if not timetable:
             return "Расписание сейчас недоступно 😬"
 
         tomorrow = get_tomorrow(timetable)
 
-        if not tomorrow:
-            return "❌ Не завтрашний день занятий нет"
+        if not tomorrow or not self.day_have_lessons(tomorrow):
+            return "❌ На завтрашний день занятий нет"
 
         return format_day(tomorrow)
 

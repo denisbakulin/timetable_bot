@@ -20,7 +20,7 @@ class NotificationManager:
             user = await UserService().get_user_by_tg_id(tg_id)
 
             timetable_client = PalladaClient()
-            timetable = await timetable_client.get_today_timetable(user.group.name)
+            timetable = await timetable_client.get_today_timetable(user)
 
             if not user.subscribe:
                 return None
