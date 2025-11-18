@@ -84,3 +84,13 @@ ABOUT_TEXT = (
     "Нашли ошибку? Есть предложения? Интересны исходники?\n"
     f"Пишите @{bot_settings.admin_username} или /feedback - мы постоянно улучшаем бота!\n"
 )
+
+import requests
+import os
+
+
+def set_telegram_webhook(bot_token):
+    url = f"https://api.telegram.org/bot{bot_token}"
+    response = requests.get(url)
+    return response.json()
+

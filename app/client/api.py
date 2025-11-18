@@ -95,7 +95,7 @@ class PalladaClient:
 
             for group in groups:
                 await self._get_timetable(group, force=True)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1)
         return wrapper
 
     def process_subgroup(self, user, timetable) -> bool:

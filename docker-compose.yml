@@ -1,7 +1,7 @@
 services:
   redis:
     image: redis
-    container_name: cache
+    container_name: redis
     restart: always
     networks:
       - bot-network
@@ -20,24 +20,12 @@ services:
     networks:
       - bot-network
     ports:
-      - "80:80"
+      - "8000:8000"
 
-#  sqlite_web:
-#    image: coleifer/sqlite-web
-#    container_name: sqlite_web
-#    ports:
-#      - "127.0.0.1:777:8080"
-#    volumes:
-#      - bot_data:/data
-#    depends_on:
-#      - bot
-#    command: ["sqlite_web", "--host", "0.0.0.0", "/data/bot.db"]
 
 volumes:
   bot_data:
 
 networks:
   bot-network:
-    driver: bridge
-  internet:
     driver: bridge
