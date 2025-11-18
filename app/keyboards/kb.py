@@ -87,7 +87,7 @@ def create_tt_kb(
              InlineKeyboardButton(
                 text="🔄 Обновить",
                 callback_data=TimetableCallback(
-                    **dict(**callback_data.dict())
+                    **callback_data.dict()
                 ).pack()
             )]
 

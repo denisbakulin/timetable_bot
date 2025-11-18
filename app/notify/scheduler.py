@@ -32,7 +32,7 @@ class NotificationManager:
                     parse_mode="HTML",
                     reply_markup=main_menu_kb
                 )
-                print(f"✅ Уведомление отправлено пользователю {tg_id}")
+
             else:
                 await bot.send_message(
                     tg_id,
@@ -40,10 +40,7 @@ class NotificationManager:
                     parse_mode="HTML",
                     reply_markup=main_menu_kb
                 )
-                print(f"ℹ️  Пользователю {tg_id} отправлено сообщение об отсутствии расписания")
 
-
-            print(f"🔚 Завершена обработка пользователя {tg_id}")
 
         return wrapper
 

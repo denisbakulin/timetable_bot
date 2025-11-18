@@ -14,6 +14,7 @@ from app.handlers.menu import create_menu_message
 from app.keyboards.kb import (TimetableCallback, cancel_kb, create_tt_kb,
                               create_week_kb, main_menu_kb, main_timetable_kb)
 
+
 router = Router()
 
 
@@ -42,11 +43,12 @@ async def process_user_timetable(message: Message, user: UserSchema, state: FSMC
             f"Расписание для группы {user.group} нет😬",
             reply_markup=main_menu_kb
         )
+
         today = weekdays[datetime.now().weekday()]
 
         await func(
             f"⌛ Расписание для группы {user.group.name}\n"  
-            f"🔥 Сегодня - {get_current_week(tt).number+1}-я неделя, {today}",
+            f"🔥 Сегодня: {get_current_week(tt).number+1}-я неделя, {today}",
             reply_markup=main_timetable_kb
         )
 
@@ -77,7 +79,7 @@ async def get_today_cmd(message: Message, state: FSMContext):
 
     await message.answer(
         timetable,
-        reply_markup=main_menu_kb
+        reply_markup=create_tt_kb(TimetableCallback(action="today"))
     )
 
 @router.message(Command("tomorrow"))
@@ -92,7 +94,7 @@ async def get_tomorrow_cmd(message: Message, state: FSMContext):
 
     await message.answer(
         timetable,
-        reply_markup=main_menu_kb
+        reply_markup=create_tt_kb(TimetableCallback(action="tomorrow"))
     )
 
 @router.callback_query(TimetableCallback.filter(F.action == "today"))
@@ -142,11 +144,14 @@ async def get_week(
     timetable = await client._get_timetable(user.group.name)
     timetable = client.user_timetable(user, timetable)
 
+
     if not timetable or not timetable.weeks:
         week_timetable = None
     else:
+        c_week = get_current_week(timetable)
         week_timetable = timetable.weeks[callback_data.n]
-        print(week_timetable.days[-1])
+        week_timetable.current = week_timetable.number == c_week.number
+
 
     if week_timetable is None:
         await callback.message.edit_text(

@@ -4,7 +4,7 @@ from json import dumps, loads
 from httpx import AsyncClient, ConnectError
 from redis import asyncio as aioredis
 
-from app.client.formatter import format_day,  weekdays, format_week
+from app.client.formatter import format_day,  weekdays
 from app.client.parser import parse_timetable
 from app.client.serialize import TimeTableResponse, Week, Day
 from app.db.user import UserService, UserSchema
@@ -208,12 +208,4 @@ class PalladaClient:
             return "❌ На завтрашний день занятий нет"
 
         return format_day(tomorrow)
-
-
-
-async def main():
-    print(await PalladaClient().get_week_timetable("БПИ25-01"))
-
-if __name__ == "__main__":
-    asyncio.run(main())
 
