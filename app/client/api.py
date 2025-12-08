@@ -128,28 +128,16 @@ class PalladaClient:
 
         group = await GroupService().get_one_by(name=group_name)
 
-        if not group:
+        if not group or not group.timetable:
             return None
-
-        response = await self.request(f"/group/{group.pallada_id}")
-
-        if response is None:
-            if group.timetable is not None:
-                return TimeTableResponse(**loads(group.timetable))
-            return None
-
-        timetable = parse_timetable(response.text)
 
         if not force:
             await cache.set(
-                group_name, dumps(timetable.model_dump()),
+                group_name, group.timetable,
                 ex=bot_settings.timetable_update_time_seconds
             )
 
-        await GroupService().update(group.id, timetable=dumps(timetable.model_dump()))
-
-
-        return timetable
+        return TimeTableResponse(**loads(group.timetable))
 
 
     async def setup_groups(self, start_group_id: int, end_group_id: int):
