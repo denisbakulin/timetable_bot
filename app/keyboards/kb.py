@@ -16,6 +16,11 @@ cmd_list = [
     ("/about", "О проекте")
 ]
 
+cmd_menu = [
+    BotCommand(command=cmd, description=desk)
+    for cmd, desk in cmd_list
+]
+
 subgroups_dict = {
     "🌐": 0,
     "1": 1,
@@ -39,6 +44,7 @@ main_menu_kb = InlineKeyboardMarkup(
     ]
 )
 
+
 menu_kb = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text="🕒 Расписание", callback_data="timetable")],
@@ -46,10 +52,7 @@ menu_kb = InlineKeyboardMarkup(
     ]
 )
 
-cmd_menu = [
-    BotCommand(command=cmd, description=desk)
-    for cmd, desk in cmd_list
-]
+
 
 
 class TimetableCallback(CallbackData, prefix="timetable"):
@@ -81,6 +84,11 @@ def create_tt_kb(
     return kb
 
 
+about_kb = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text="github", url="https://github.com/denisbakulin/timetable_bot")]
+    ] + main_menu_kb.inline_keyboard
+)
 
 def format_week_day_name(week: Week, day: Day) -> str:
     if not week.current:
