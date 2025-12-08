@@ -16,25 +16,13 @@ cmd_list = [
     ("/about", "О проекте")
 ]
 
-
-admin_kb = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(callback_data="users", text="Пользователи")],
-    ]
-)
-
-back_admin_kb = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(callback_data="admin", text="Админ Панель")]
-    ]
-)
+subgroups_dict = {
+    "🌐": 0,
+    "1": 1,
+    "2": 2,
+}
 
 
-users_admin_kb = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(callback_data="users_info", text="Список")],
-    ] + back_admin_kb.inline_keyboard
-)
 
 cancel_kb = (
     InlineKeyboardMarkup(
@@ -43,9 +31,6 @@ cancel_kb = (
         ]
     )
 )
-
-
-
 
 
 main_menu_kb = InlineKeyboardMarkup(
@@ -168,11 +153,7 @@ main_timetable_kb = InlineKeyboardMarkup(
 class SubGroupCallback(CallbackData, prefix="subgroup"):
     n: int
 
-subgroups_dict = {
-    "🌐": 0,
-    "1": 1,
-    "2": 2,
-}
+
 
 change_subgroup_kb = InlineKeyboardMarkup(
     inline_keyboard=[
@@ -182,6 +163,7 @@ change_subgroup_kb = InlineKeyboardMarkup(
         ) for key, value in subgroups_dict.items()]
     ] + cancel_kb.inline_keyboard
 )
+
 def create_settings_kb(user):
     return InlineKeyboardMarkup(
         inline_keyboard=[

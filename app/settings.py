@@ -7,7 +7,6 @@ env_path = Path(__file__).parent.parent
 
 class BotSettings(BaseSettings):
     token: str
-    admin_chat_id: int
     feedback_thread_id: int
 
     timetable_url: str
@@ -17,9 +16,6 @@ class BotSettings(BaseSettings):
 
     cache_url: str
     cache_port: int
-
-    host: str
-
 
     class Config:
         env_file = env_path / ".env"

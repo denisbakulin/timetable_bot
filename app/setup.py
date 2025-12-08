@@ -8,6 +8,9 @@ from app.filters.default import AnswerCallback
 from app.notify.scheduler import notification_manager, scheduler
 
 
+START_PARSE_GROUP_ID = 13_000
+END_PARSE_GROUP_ID = 15_000
+
 async def setup(dp: Dispatcher, bot: Bot):
     from app.handlers.about import router as about_router
     from app.handlers.admin import router as admin_router
@@ -50,7 +53,9 @@ async def setup(dp: Dispatcher, bot: Bot):
     groups = await GroupService().get_any_by()
 
     if not groups:
-        await PalladaClient().setup_groups(13000, 15000)
+        await PalladaClient().setup_groups(
+            START_PARSE_GROUP_ID, END_PARSE_GROUP_ID
+        )
 
 
     #парсит расписание для зарегистрированных пользователей
@@ -58,10 +63,11 @@ async def setup(dp: Dispatcher, bot: Bot):
         PalladaClient().update_timetable_task(),
         "cron", hour=7,
     )
+
     # парсит расписание всех групп
     scheduler.add_job(
         PalladaClient().update_timetable_task(all_=True),
-        "cron", hour=6,
+        "cron", hour=6, day_of_week="mon"
     )
 
 

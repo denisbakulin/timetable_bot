@@ -19,13 +19,10 @@ services:
     restart: always
     networks:
       - bot-network
-    ports:
-      - "8000:8000"
-
-
-volumes:
-  bot_data:
-
+        
 networks:
   bot-network:
     driver: bridge
+
+volumes:
+  bot_data:

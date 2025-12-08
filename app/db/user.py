@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, select
+from sqlalchemy import ForeignKey, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.group import Group, GroupSchema
@@ -38,13 +38,14 @@ class UserRepository(BaseRepository[User]):
     async def get_user_groups(self):
 
         stmt = (
-            select(Group.name)
+            select(Group.name, func.count(User.group))
             .join(User, User.pallada_id == Group.pallada_id)
-            .distinct()
+            .group_by(Group.id)
         )
 
         res = await self.session.execute(stmt)
-        return res.scalars().all()
+        return res.tuples().all()
+
 
 class UserService(BaseService[User, UserRepository, UserSchema]):
     model = User
@@ -71,10 +72,7 @@ class UserService(BaseService[User, UserRepository, UserSchema]):
         users = await self.get_any_by()
         return [user.tg_id for user in users]
 
-    async def get_user_groups(self) -> list[str]:
+    async def get_user_groups(self) -> tuple[Group, int]:
         async with self.with_repo() as repo:
-            res = await repo.get_user_groups()
-            return [*res]
-
-
+            return await repo.get_user_groups()
 

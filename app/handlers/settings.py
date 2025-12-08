@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from aiogram import F, Router
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import  StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from app.handlers.timetable import process_user_timetable
@@ -11,7 +11,7 @@ from app.db.user import UserService, UserSchema
 from app.db.group import GroupService
 from app.fsm.default import Waiting
 from app.keyboards.kb import (cancel_kb, create_settings_kb, main_menu_kb,
-                              main_timetable_kb, SubGroupCallback, change_subgroup_kb)
+                             SubGroupCallback, change_subgroup_kb)
 
 router = Router()
 
