@@ -1,6 +1,4 @@
 from pydantic import BaseModel, Field
-from datetime import datetime
-
 
 class SubLesson(BaseModel):
     name: str
@@ -8,7 +6,6 @@ class SubLesson(BaseModel):
     teacher: str
     place: str
     subgroup: str | None = None
-
 
 
 class Lesson(BaseModel):

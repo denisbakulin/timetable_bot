@@ -15,8 +15,6 @@ router = Router()
 router.message.filter(IsAdminFilter())
 
 
-
-
 @router.message(Command("admin"))
 async def dist(message: Message):
     await message.answer(ADMIN_TEXT)
@@ -47,9 +45,8 @@ async def dist_send(message: Message, bot: Bot, state: FSMContext):
         try:
             await bot.send_message(uid, f"🔔 Уведомление [рассылка]\n\n{message.text}")
             sent += 1
-        except Exception as e:
-
-            print(f"[ERROR] Can't send to {uid}: {e}")
+        except Exception:
+            ...
 
 
     tasks = [asyncio.create_task(safe_send(uid)) for uid in ids]

@@ -27,14 +27,10 @@ subgroups_dict = {
     "2": 2,
 }
 
-
-
-cancel_kb = (
-    InlineKeyboardMarkup(
-        inline_keyboard=[
-         [InlineKeyboardButton(text=f"Отмена", callback_data="delete")]
-        ]
-    )
+cancel_kb = InlineKeyboardMarkup(
+    inline_keyboard=[
+     [InlineKeyboardButton(text=f"Отмена", callback_data="delete")]
+    ]
 )
 
 
@@ -51,8 +47,6 @@ menu_kb = InlineKeyboardMarkup(
         [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
     ]
 )
-
-
 
 
 class TimetableCallback(CallbackData, prefix="timetable"):
@@ -78,7 +72,6 @@ def create_tt_kb(
                     **callback_data.dict()
                 ).pack()
             )]
-
         ]
     )
     return kb
@@ -90,6 +83,15 @@ about_kb = InlineKeyboardMarkup(
     ] + main_menu_kb.inline_keyboard
 )
 
+
+def check_sub_lessons(day: Day) -> bool:
+    flag = False
+    for lesson in day.lessons:
+        flag = flag or bool(lesson.sub_lessons)
+        if flag:
+            return True
+    return False
+
 def format_week_day_name(week: Week, day: Day) -> str:
     if not week.current:
         return day.name
@@ -99,14 +101,8 @@ def format_week_day_name(week: Week, day: Day) -> str:
 
     return day.name
 
+
 def create_week_kb(week: Week, callback_data):
-    def check_sub_lessons(day: Day) -> bool:
-        flag = False
-        for lesson in day.lessons:
-            flag = flag or bool(lesson.sub_lessons)
-            if flag:
-                return True
-        return False
 
     days_buttons = []
     for day in week.days:
@@ -127,8 +123,6 @@ def create_week_kb(week: Week, callback_data):
         days_keyboard.append(row)
 
 
-
-    # Кнопка "Все расписание"
     all_week = [[InlineKeyboardButton(
         text="📊 Все расписание",
         callback_data=TimetableCallback(
@@ -139,12 +133,12 @@ def create_week_kb(week: Week, callback_data):
     )]]
 
 
-
     week_kb = InlineKeyboardMarkup(
         inline_keyboard=days_keyboard + all_week + create_tt_kb(callback_data).inline_keyboard
     )
 
     return week_kb
+
 
 main_timetable_kb = InlineKeyboardMarkup(
     inline_keyboard=[
@@ -160,7 +154,6 @@ main_timetable_kb = InlineKeyboardMarkup(
 
 class SubGroupCallback(CallbackData, prefix="subgroup"):
     n: int
-
 
 
 change_subgroup_kb = InlineKeyboardMarkup(

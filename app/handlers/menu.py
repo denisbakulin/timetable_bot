@@ -22,7 +22,7 @@ async def create_menu_message(message: Message, user_id: int, edit=False):
 
 
 @router.message(Command("menu"))
-@router.message(F.text == "Меню")
+@router.message(F.text.lower() == "меню")
 async def get_me(message: Message, state: FSMContext):
     await state.clear()
     await create_menu_message(message, message.from_user.id)

@@ -3,13 +3,11 @@ from aiogram import Bot, Dispatcher
 from app.client.api import PalladaClient
 from app.db.base import init_db
 
-from app.db.group import GroupService
 from app.filters.default import AnswerCallback
-from app.notify.scheduler import notification_manager, scheduler
+from app.notify.scheduler import notification_manager
 
 
-START_PARSE_GROUP_ID = 13_000
-END_PARSE_GROUP_ID = 15_000
+
 
 async def setup(dp: Dispatcher, bot: Bot):
     from app.handlers.about import router as about_router
@@ -23,6 +21,7 @@ async def setup(dp: Dispatcher, bot: Bot):
     from app.handlers.start import router as start_router
     from app.handlers.timetable import router as timetable_router
 
+    from app.keyboards.kb import cmd_menu
 
     bot.admins = []
 
@@ -44,38 +43,19 @@ async def setup(dp: Dispatcher, bot: Bot):
     from app.db.group import Group
     from app.db.user import User
 
+    # инициализация моделей
     await init_db()
+
+    # определение админов
     await init_admins(bot)
 
+    # загрузка всех групп
+    await PalladaClient.init()
+
+    # фоновые задачи и уведомления
     await notification_manager.setup_notify()
 
-
-    groups = await GroupService().get_any_by()
-
-    if not groups:
-        await PalladaClient().setup_groups(
-            START_PARSE_GROUP_ID, END_PARSE_GROUP_ID
-        )
-
-
-    #парсит расписание для зарегистрированных пользователей
-    scheduler.add_job(
-        PalladaClient().update_timetable_task(),
-        "cron", hour=7,
-    )
-
-    # парсит расписание всех групп
-    scheduler.add_job(
-        PalladaClient().update_timetable_task(all_=True),
-        "cron", hour=6, day_of_week="mon"
-    )
-
-
-
-    scheduler.start()
-
-
-    from app.keyboards.kb import cmd_menu
+    # установка команд
     await bot.set_my_commands(cmd_menu)
 
 

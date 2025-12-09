@@ -30,3 +30,5 @@ class GroupService(BaseService[Group, GroupRepository, GroupSchema]):
     model = Group
     repository = GroupRepository
     schema = GroupSchema
+
+

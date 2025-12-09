@@ -18,7 +18,7 @@ data_dir.mkdir(exist_ok=True)
 # Путь к базе данных в папке data
 DB_PATH = data_dir / "bot.db"
 
-# Подключение к SQLite
+
 engine = create_async_engine(
     url=f"sqlite+aiosqlite:///{DB_PATH}",
     echo=True  # для отладки SQL запросов

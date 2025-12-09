@@ -56,4 +56,20 @@ class NotificationManager:
                 id=str(user.tg_id), replace_existing=True
             )
 
+        # парсит расписание для зарегистрированных пользователей
+        scheduler.add_job(
+            PalladaClient().update_timetable_task(),
+            "cron", hour=7,
+        )
+
+        # парсит расписание всех групп
+        scheduler.add_job(
+            PalladaClient().update_timetable_task(all_=True),
+            "cron", hour=6, day_of_week="mon"
+        )
+
+        scheduler.start()
+
+
+
 notification_manager = NotificationManager()

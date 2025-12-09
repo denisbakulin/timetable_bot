@@ -10,8 +10,10 @@ from app.data import SETTINGS_TEXT, CHANGE_GROUP_TEXT
 from app.db.user import UserService, UserSchema
 from app.db.group import GroupService
 from app.fsm.default import Waiting
-from app.keyboards.kb import (cancel_kb, create_settings_kb, main_menu_kb,
-                             SubGroupCallback, change_subgroup_kb)
+from app.keyboards.kb import (
+    cancel_kb, create_settings_kb, main_menu_kb,
+    SubGroupCallback, change_subgroup_kb
+)
 
 router = Router()
 
@@ -50,7 +52,7 @@ async def sub_group_process(
 ):
     service = UserService()
     user = await service.get_user_by_tg_id(callback.from_user.id)
-    user = await service.update(user.id, subgroup = callback_data.n)
+    await service.update(user.id, subgroup=callback_data.n)
 
 
     if callback_data.n == 0:
@@ -59,7 +61,7 @@ async def sub_group_process(
     else:
         msg = f"✅ Выбрана подгруппа {callback_data.n}"
 
-    await callback.message.edit_text(msg,reply_markup=main_menu_kb)
+    await callback.message.edit_text(msg, reply_markup=main_menu_kb)
 
 
 @router.callback_query(F.data == "subscribe")

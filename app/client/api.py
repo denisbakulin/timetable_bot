@@ -1,5 +1,5 @@
 import asyncio
-from json import dumps, loads
+from json import loads
 
 from httpx import AsyncClient, ConnectError
 from redis import asyncio as aioredis
@@ -12,6 +12,7 @@ from app.db.group import GroupService
 
 
 from app.settings import bot_settings
+from datetime import datetime
 
 
 cache = aioredis.from_url(
@@ -20,7 +21,7 @@ cache = aioredis.from_url(
     decode_responses=True
 )
 
-from datetime import datetime
+
 
 
 def get_current_week(tt: TimeTableResponse) -> Week:
@@ -52,12 +53,28 @@ def get_tomorrow(tt: TimeTableResponse) -> Day | None:
         return next((day for day in next_week.days if day.name == weekdays[0]), None)
 
     week = get_current_week(tt)
+
     if week is None:
         return None
+
     return next((day for day in week.days if day.name == weekdays[tomorrow]), None)
 
 
+START_PARSE_GROUP_ID = 13_000
+END_PARSE_GROUP_ID = 15_000
+
 class PalladaClient:
+
+
+
+    @staticmethod
+    async def init():
+        groups = await GroupService().get_any_by()
+
+        if not groups:
+            await PalladaClient().setup_groups(
+                START_PARSE_GROUP_ID, END_PARSE_GROUP_ID
+            )
 
     async def request(
             self,
@@ -94,7 +111,7 @@ class PalladaClient:
                 groups = await UserService().get_user_groups()
 
             for group in groups:
-                await self._get_timetable(group, force=True)
+                await self._get_timetable(group, set_cache=not all_)
                 await asyncio.sleep(1)
         return wrapper
 
@@ -119,11 +136,11 @@ class PalladaClient:
 
 
 
-    async def _get_timetable(self, group_name: str, force: bool = False) -> TimeTableResponse | None:
+    async def _get_timetable(self, group_name: str, set_cache: bool = False) -> TimeTableResponse | None:
         group_name = group_name.upper()
         cached = await cache.get(group_name)
 
-        if cached and not force:
+        if cached and not set_cache:
             return TimeTableResponse(**loads(cached))
 
         group = await GroupService().get_one_by(name=group_name)
@@ -131,7 +148,7 @@ class PalladaClient:
         if not group or not group.timetable:
             return None
 
-        if not force:
+        if set_cache:
             await cache.set(
                 group_name, group.timetable,
                 ex=bot_settings.timetable_update_time_seconds
@@ -142,13 +159,11 @@ class PalladaClient:
 
     async def setup_groups(self, start_group_id: int, end_group_id: int):
 
-        count = 0
         for group_id in range(start_group_id, end_group_id):
             client = AsyncClient()
             res = await self.request(f"/group/{group_id}", client=client)
 
             if res is not None:
-
 
                 group_service = GroupService()
                 group = await group_service.get_one_by(pallada_id=group_id)
@@ -156,12 +171,10 @@ class PalladaClient:
                 parse = parse_timetable(res.text)
 
                 if group is None:
-                    count += 1
                     await group_service.create(pallada_id=group_id, name=parse.group_name)
 
             await asyncio.sleep(0.5)
 
-        return count
 
     async def get_today_timetable(self, user: UserSchema):
         timetable = await self._get_timetable(user.group.name)
@@ -176,9 +189,10 @@ class PalladaClient:
             return "❌ На сегодняшний день занятий нет"
 
         return format_day(today, today=True)
+
     def day_have_lessons(self, day: Day) -> bool:
         for lesson in day.lessons:
-            for sub in lesson.sub_lessons:
+            for _ in lesson.sub_lessons:
                 return True
         return False
 
