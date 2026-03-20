@@ -6,11 +6,17 @@ from app.settings import bot_settings
 from app.setup import setup
 from aiogram.client.default import DefaultBotProperties
 
+from app.fsm.default import storage
+
 
 logging.basicConfig(level=logging.DEBUG)
-bot = Bot(token=bot_settings.token, default=DefaultBotProperties(parse_mode='HTML'))
+bot = Bot(
+    token=bot_settings.token,
+    default=DefaultBotProperties(parse_mode='HTML'),
 
-dp = Dispatcher()
+)
+
+dp = Dispatcher(storage=storage)
 
 
 async def main() -> None:

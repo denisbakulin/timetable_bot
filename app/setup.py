@@ -8,10 +8,8 @@ from app.notify.scheduler import notification_manager
 
 
 
-
 async def setup(dp: Dispatcher, bot: Bot):
     from app.handlers.about import router as about_router
-    from app.handlers.admin import router as admin_router
     from app.handlers.feedback import router as feedback_router
     from app.handlers.group import init_admins
     from app.handlers.group import router as group_router
@@ -32,7 +30,6 @@ async def setup(dp: Dispatcher, bot: Bot):
         start_router,
         timetable_router,
         settings_router,
-        admin_router,
         group_router,
         about_router
     )
