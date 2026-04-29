@@ -9,14 +9,14 @@ from aiogram.types import CallbackQuery, Message
 import httpx
 from sqlalchemy import func, select
 
-from app.client.api import PalladaClient, cache
+from app.client.api import cache
 from app.data import ADMIN_HELP_TEXT
 from app.db.ban import BanService
 from app.db.base import session_maker
 from app.db.config import AppConfigService
 from app.db.group import Group
 from app.db.group_refresh import GroupRefreshService
-from app.db.user import User, UserService
+from app.db.user import User
 from app.db.group import GroupService
 from app.filters.default import IsAdminFilter
 from app.keyboards.kb import (
@@ -167,76 +167,6 @@ async def unban_user_cmd(message: Message):
     tg_id = int(parts[1])
     ok = await BanService().unban(tg_id)
     await message.answer("Разбанен." if ok else "Пользователь не в бан-листе.")
-
-
-@router.message(Command("broadcast"))
-async def broadcast_cmd(message: Message):
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2 or not parts[1].strip():
-        return await message.answer("Использование: /broadcast <текст> (отправит подписанным пользователям)")
-
-    text = parts[1].strip()
-    users = await UserService().get_any_by()
-    targets = [u.tg_id for u in users if u.subscribe]
-
-    sent = 0
-    failed = 0
-    for tg_id in targets:
-        try:
-            await message.bot.send_message(tg_id, text)
-            sent += 1
-        except Exception:
-            failed += 1
-    await message.answer(f"Рассылка завершена. OK={sent}, FAIL={failed}.")
-
-@router.message(Command("broadcast_all"))
-async def broadcast_all_cmd(message: Message):
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2 or not parts[1].strip():
-        return await message.answer("Использование: /broadcast_all <текст> (отправит всем пользователям)")
-
-    text = parts[1].strip()
-    users = await UserService().get_any_by()
-    targets = [u.tg_id for u in users]
-
-    sent = 0
-    failed = 0
-    for tg_id in targets:
-        try:
-            await message.bot.send_message(tg_id, text)
-            sent += 1
-        except Exception:
-            failed += 1
-    await message.answer(f"Рассылка завершена. OK={sent}, FAIL={failed}.")
-
-
-@router.message(Command("broadcast_group"))
-async def broadcast_group_cmd(message: Message):
-    parts = message.text.split(maxsplit=2)
-    if len(parts) < 3:
-        return await message.answer("Использование: /broadcast_group <group_name|pallada_id> <текст>")
-
-    token = parts[1].strip()
-    text = parts[2].strip()
-    if token.isdigit():
-        grp = await GroupService().get_one_by(pallada_id=int(token))
-    else:
-        grp = await GroupService().get_one_by(name=token.upper())
-    if grp is None:
-        return await message.answer("Группа не найдена в БД.")
-
-    users = await UserService().get_any_by(pallada_id=grp.pallada_id)
-    targets = [u.tg_id for u in users]
-
-    sent = 0
-    failed = 0
-    for tg_id in targets:
-        try:
-            await message.bot.send_message(tg_id, text)
-            sent += 1
-        except Exception:
-            failed += 1
-    await message.answer(f"Рассылка по {grp.name}. OK={sent}, FAIL={failed}.")
 
 
 @router.message(Command("group_stats"))

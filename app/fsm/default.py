@@ -33,6 +33,7 @@ class Waiting(StatesGroup):
     feedback = State()
     group = State()
     notify_time = State()
+    favorite_group = State()
 
     dist = State()
     setup_group = State()

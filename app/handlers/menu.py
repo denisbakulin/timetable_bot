@@ -13,7 +13,7 @@ router = Router()
 
 async def create_menu_message(message: Message, user_id: int, edit=False):
     user = await UserService().get_user_by_tg_id(user_id)
-    group = user.group.name if user.group else None
+    group = str(user.group) if user.group else "не выбрана"
     text = MENU_TEXT.format(group=group)
 
     func = message.edit_text if edit else message.answer

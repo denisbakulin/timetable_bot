@@ -12,10 +12,7 @@ cmd_list = [
     ("/menu", "Главное меню"),
     ("/today", "Расписание на сегодня"),
     ("/tomorrow", "Расписание на завтра"),
-    ("/help", "Помощь"),
-    ("/feedback", "Обратная связь"),
-    ("/about", "О проекте"),
-    ("/admin_help", "Админ: помощь"),
+
 ]
 
 cmd_menu = [
@@ -43,20 +40,26 @@ main_menu_kb = InlineKeyboardMarkup(
 )
 
 
-menu_kb = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text="🕒 Расписание", callback_data="timetable")],
-        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
-    ]
-)
-
-
 class TimetableCallback(CallbackData, prefix="timetable"):
     action: str
     n: int | None = None
     day: str | None = None
     updated: int | None = None
     all: bool = False
+
+
+menu_kb = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🕒 Расписание", callback_data="timetable"),
+            InlineKeyboardButton(
+                text="Ленты",
+                callback_data=TimetableCallback(action="next_lesson").pack(),
+            ),
+        ],
+        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
+    ]
+)
 
 
 
@@ -77,6 +80,39 @@ def create_tt_kb(
         ]
     )
     return kb
+
+
+def create_next_lesson_kb(current_index: int, total: int) -> InlineKeyboardMarkup:
+    nav_row = []
+    if current_index > 0:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="◀️ Предыдущая",
+                callback_data=TimetableCallback(action="next_lesson", n=current_index - 1).pack(),
+            )
+        )
+
+
+    if current_index < total - 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="Следующая ▶️",
+                callback_data=TimetableCallback(action="next_lesson", n=current_index + 1).pack(),
+            )
+        )
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            nav_row,
+            [
+                InlineKeyboardButton(
+                    text="🔄 Ближайшая",
+                    callback_data=TimetableCallback(action="next_lesson").pack(),
+                ),
+                InlineKeyboardButton(text="🏠 Главная", callback_data="menu"),
+            ],
+        ]
+    )
 
 
 about_kb = InlineKeyboardMarkup(
@@ -147,8 +183,9 @@ main_timetable_kb = InlineKeyboardMarkup(
         [InlineKeyboardButton(text="✨ Сегодня", callback_data=TimetableCallback(action="today").pack()),
          InlineKeyboardButton(text="🕒 Завтра", callback_data=TimetableCallback(action="tomorrow").pack())],
 
-        [InlineKeyboardButton(text="📋 1-я неделя", callback_data=TimetableCallback(action="week", n=0).pack()),
-         InlineKeyboardButton(text="📋 2-я неделя", callback_data=TimetableCallback(action="week", n=1).pack())],
+        [InlineKeyboardButton(text="📋 1-я / нечет", callback_data=TimetableCallback(action="week", n=0).pack()),
+         InlineKeyboardButton(text="📋 2-я / чет", callback_data=TimetableCallback(action="week", n=1).pack())],
+        [InlineKeyboardButton(text="⭐ Избранные группы", callback_data="favorite_groups_timetable")],
         [InlineKeyboardButton(text="🏠 Главная", callback_data=TimetableCallback(action="cancel").pack())]
 
 ])
@@ -172,11 +209,96 @@ def create_settings_kb(user):
         inline_keyboard=[
             [InlineKeyboardButton(text="🔕 Отписаться" if user.subscribe else "🔔 Подписаться", callback_data="subscribe")],
             [InlineKeyboardButton(text="🔄 Изменить группу", callback_data="change_group")],
+            [InlineKeyboardButton(text="⭐ Избранные группы", callback_data="favorite_groups")],
             [InlineKeyboardButton(text="🧩 Изменить подгруппу", callback_data="change_subgroup")],
             [InlineKeyboardButton(text="⏰ Время отправки расписания", callback_data="change_notify_time")],
+            [InlineKeyboardButton(text="⏳ Напоминание до пары", callback_data="change_lesson_notify")],
             [InlineKeyboardButton(text="« Назад", callback_data="menu")]
         ]
     )
+
+
+class LessonNotifyCallback(CallbackData, prefix="lesson_notify"):
+    minutes: int
+
+
+def create_lesson_notify_kb(current_minutes: int) -> InlineKeyboardMarkup:
+    minutes_list = [0, 5, 10, 15, 30]
+    buttons = []
+
+    for minutes in minutes_list:
+        title = "Выключено" if minutes == 0 else f"{minutes} мин"
+        if current_minutes == minutes:
+            title = f"✅ {title}"
+        buttons.append(
+            InlineKeyboardButton(
+                text=title,
+                callback_data=LessonNotifyCallback(minutes=minutes).pack(),
+            )
+        )
+
+    rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton(text="« Назад", callback_data="settings")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+class FavoriteGroupCallback(CallbackData, prefix="favorite_group"):
+    action: str
+    group_id: int
+    source: str = "settings"
+
+
+def create_favorite_groups_kb(
+    favorites,
+    current_group_id: int | None,
+    *,
+    source: str,
+    remove_mode: bool = False,
+) -> InlineKeyboardMarkup:
+    rows = []
+
+    for favorite in favorites:
+        group = favorite.group
+        if remove_mode:
+            text = f"❌ {group.name}"
+            action = "remove"
+        else:
+            text = f"✅ {group.name}" if group.pallada_id == current_group_id else f"⭐ {group.name}"
+            action = "set"
+
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=FavoriteGroupCallback(
+                        action=action,
+                        group_id=group.pallada_id,
+                        source=source,
+                    ).pack(),
+                )
+            ]
+        )
+
+    if source == "settings":
+        rows.append([InlineKeyboardButton(text="➕ Добавить группу", callback_data="add_favorite_group")])
+        if favorites:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="✅ Готово" if remove_mode else "🗑 Удалить группу",
+                        callback_data="favorite_groups" if remove_mode else "favorite_groups_remove",
+                    )
+                ]
+            )
+        rows.append([InlineKeyboardButton(text="« Назад", callback_data="settings")])
+    elif source == "change_group":
+        rows.append([InlineKeyboardButton(text="✍️ Ввести другую группу", callback_data="change_group_manual")])
+        rows.append([InlineKeyboardButton(text="« Назад", callback_data="settings")])
+    else:
+        rows.append([InlineKeyboardButton(text="⚙️ Управление", callback_data="favorite_groups")])
+        rows.append([InlineKeyboardButton(text="« Назад", callback_data="timetable")])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 class AdminGroupsCallback(CallbackData, prefix="admin_groups"):

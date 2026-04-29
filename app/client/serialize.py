@@ -1,9 +1,11 @@
 from pydantic import BaseModel, Field
 
+
 class SubLesson(BaseModel):
     name: str
     type: str
     teacher: str
+    teacher_url: str | None = None
     place: str
     subgroup: str | None = None
 

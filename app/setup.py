@@ -6,6 +6,7 @@ from app.db.base import init_db
 from app.db.config import AppConfigService  # registers model for create_all
 from app.db.ban import BanService  # registers model for create_all
 from app.db.group_refresh import GroupRefreshService  # registers model for create_all
+from app.db.favorite_group import FavoriteGroupService  # registers model for create_all
 
 from app.filters.default import AnswerCallback
 from app.notify.scheduler import notification_manager
@@ -52,6 +53,7 @@ async def setup(dp: Dispatcher, bot: Bot):
     dp.message.middleware(BanMiddleware())
     dp.callback_query.middleware(BanMiddleware())
 
+    from app.db.favorite_group import UserFavoriteGroup
     from app.db.group import Group
     from app.db.user import User
 

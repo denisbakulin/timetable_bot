@@ -10,6 +10,7 @@ from app.client.api import PalladaClient
 from app.data import ADMIN_HELP_TEXT, ADMIN_TEXT
 from app.db.base import session_maker
 from app.db.group import Group
+from app.db.group import GroupService
 from app.db.user import User
 from app.db.user import UserService
 from app.filters.default import IsAdminFilter
@@ -38,6 +39,14 @@ def _parse_range_token(token: str) -> tuple[int, int] | None:
         return v, v
 
     return None
+
+
+async def _resolve_group_name(token: str) -> Group | None:
+    # Accept raw group name, case-insensitive.
+    t = token.strip().upper()
+    if not t:
+        return None
+    return await GroupService().get_one_by(name=t)
 
 
 async def _refresh_range(message: Message, start_id: int, end_id: int, *, ok_word: str = "обновлена"):
@@ -91,12 +100,23 @@ async def add_group_cmd(message: Message):
         )
 
     token = parts[1] if len(parts) == 2 else parts[2]
-    parsed_range = _parse_range_token(token)
-    if parsed_range is None:
-        return await message.answer("Не понял id/диапазон. Пример: `/add_group 13887` или `/add_group 13887-13910`.")
 
-    start_id, end_id = parsed_range
-    return await _refresh_range(message, start_id, end_id, ok_word="добавлена/обновлена")
+    parsed_range = _parse_range_token(token)
+    if parsed_range is not None:
+        start_id, end_id = parsed_range
+        return await _refresh_range(message, start_id, end_id, ok_word="добавлена/обновлена")
+
+    # Allow: /add_group <GROUP_NAME> (refresh existing group in DB)
+    grp = await _resolve_group_name(token)
+    if grp is None:
+        return await message.answer(
+            "Не понял аргумент.\n"
+            "Примеры:\n"
+            "/add_group 13887\n"
+            "/add_group 13887-13910\n"
+            "/add_group БИЭ24-01 (если уже есть в БД)"
+        )
+    return await _refresh_range(message, grp.pallada_id, grp.pallada_id, ok_word="обновлена")
 
 
 @router.message(Command("refresh_group"))
@@ -109,12 +129,18 @@ async def refresh_group_cmd(message: Message):
     if len(parts) < 2:
         return await message.answer("Использование: /refresh_group <pallada_id|start-end>")
 
-    parsed_range = _parse_range_token(parts[1])
-    if parsed_range is None:
-        return await message.answer("Не понял id/диапазон. Пример: /refresh_group 13887-13910")
+    token = parts[1].strip()
+    parsed_range = _parse_range_token(token)
+    if parsed_range is not None:
+        start_id, end_id = parsed_range
+        return await _refresh_range(message, start_id, end_id, ok_word="обновлена")
 
-    start_id, end_id = parsed_range
-    return await _refresh_range(message, start_id, end_id, ok_word="обновлена")
+    grp = await _resolve_group_name(token)
+    if grp is None:
+        return await message.answer(
+            "Не понял аргумент. Пример: /refresh_group 13887-13910 или /refresh_group БИЭ24-01 (если есть в БД)."
+        )
+    return await _refresh_range(message, grp.pallada_id, grp.pallada_id, ok_word="обновлена")
 
 
 @router.message(Command("admin_stats"))

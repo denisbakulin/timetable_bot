@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
                                     create_async_engine)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -137,5 +137,17 @@ class BaseService(Generic[M, R, S]):
 
 
 async def init_db():
-    async with engine.connect() as conn:
+    async with engine.begin() as conn:
         await conn.run_sync(BaseORM.metadata.create_all)
+        result = await conn.exec_driver_sql("PRAGMA table_info(users)")
+        columns = {row[1] for row in result.fetchall()}
+
+        if "lesson_notify_minutes" not in columns:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN lesson_notify_minutes INTEGER NOT NULL DEFAULT 0"
+            )
+
+        if "last_lesson_notification_key" not in columns:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN last_lesson_notification_key TEXT"
+            )

@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, select, func
+from sqlalchemy import ForeignKey, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.group import Group, GroupSchema
@@ -12,12 +12,13 @@ class User(BaseORM):
     __tablename__ = "users"
 
     tg_id: Mapped[int] = mapped_column(unique=True, nullable=False, index=True)
-    subscribe: Mapped[bool] = mapped_column(default=True)
-
+    subscribe: Mapped[bool] = mapped_column(default=False)
     notify_time: Mapped[time] = mapped_column(default=time(hour=7, minute=0))
+    lesson_notify_minutes: Mapped[int] = mapped_column(default=0)
+    last_lesson_notification_key: Mapped[str | None] = mapped_column(default=None)
 
     pallada_id: Mapped[int | None] = mapped_column(ForeignKey("groups.pallada_id"))
-    group: Mapped[str] = relationship("Group", lazy="joined")
+    group: Mapped[Group | None] = relationship("Group", lazy="joined")
     subgroup: Mapped[int] = mapped_column(default=0)
 
     def __repr__(self):
@@ -28,6 +29,8 @@ class UserSchema(BaseSchema):
     subscribe: bool
     group: GroupSchema | None
     notify_time: time
+    lesson_notify_minutes: int
+    last_lesson_notification_key: str | None = None
     subgroup: int
 
 class UserRepository(BaseRepository[User]):
@@ -57,7 +60,7 @@ class UserService(BaseService[User, UserRepository, UserSchema]):
         async with self.with_repo() as repo:
             user = await repo.get_one_by(tg_id=tg_id)
             if user is None:
-                user = await repo.create(tg_id=tg_id)
+                user = await repo.create(tg_id=tg_id, subscribe=False)
 
             return self.serialize(user)
 
@@ -66,6 +69,19 @@ class UserService(BaseService[User, UserRepository, UserSchema]):
             user = await repo.get_one_by(tg_id=tg_id)
             updated_user = await repo.update(user, subscribe=not user.subscribe)
             return self.serialize(updated_user)
+
+    async def set_group(self, tg_id: int, group: GroupSchema) -> UserSchema:
+        async with self.with_repo() as repo:
+            user = await repo.get_one_by(tg_id=tg_id)
+            if user is None:
+                user = await repo.create(tg_id=tg_id)
+            user_id = user.id
+            await repo.update(user, pallada_id=group.pallada_id)
+
+        from app.db.favorite_group import FavoriteGroupService
+
+        await FavoriteGroupService().add_for_user(user_id, group.pallada_id)
+        return await self.get_user_by_tg_id(tg_id)
 
 
     async def get_all_ids(self) -> list[int]:

@@ -6,13 +6,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.data import CHANGE_GROUP_TEXT
-from app.client.api import PalladaClient, format_day, get_current_week, weekdays
-from app.client.formatter import format_week
+from app.client.api import PalladaClient, format_day, get_current_week, get_today, weekdays
+from app.client.formatter import format_lesson, format_week, format_week_title, get_russian_date
 from app.db.user import UserSchema, UserService
 from app.fsm.default import Waiting
 from app.handlers.menu import create_menu_message
-from app.keyboards.kb import (TimetableCallback, cancel_kb, create_tt_kb,
-                              create_week_kb, main_menu_kb, main_timetable_kb)
+from app.keyboards.kb import (TimetableCallback, cancel_kb, create_next_lesson_kb,
+                              create_tt_kb, create_week_kb, main_menu_kb,
+                              main_timetable_kb)
 
 
 router = Router()
@@ -45,10 +46,12 @@ async def process_user_timetable(message: Message, user: UserSchema, state: FSMC
         )
 
         today = weekdays[datetime.now().weekday()]
+        current_week = get_current_week(tt)
+        week_title = format_week_title(current_week.number) if current_week else "неделя не определена"
 
         await func(
             f"⌛ Расписание для группы {user.group.name}\n"  
-            f"🔥 Сегодня: {get_current_week(tt).number+1}-я неделя, {today}",
+            f"🔥 Сегодня: {week_title}, {today}",
             reply_markup=main_timetable_kb
         )
 
@@ -118,6 +121,85 @@ def format_edited_message(main: str, updated: int) -> str:
     return main + upd
 
 
+def get_day_lessons(day) -> list:
+    return [lesson for lesson in day.lessons if lesson.sub_lessons]
+
+
+def get_relevant_lesson_index(lessons: list) -> tuple[int, str]:
+    now = datetime.now().time()
+
+    for index, lesson in enumerate(lessons):
+        start = datetime.strptime(lesson.start, "%H:%M").time()
+        end = datetime.strptime(lesson.end, "%H:%M").time()
+
+        if start <= now <= end:
+            return index, "🟢 Сейчас идет"
+        if now < start:
+            return index, "⏭ Следующая пара"
+
+    return len(lessons) - 1, "✅ На сегодня пары закончились"
+
+
+def build_next_lesson_text(user: UserSchema, day, lessons: list, index: int, title: str) -> str:
+    lesson = lessons[index]
+    lesson_text = format_lesson(lesson)
+
+    return (
+        f"{title}\n"
+        f"👥 Группа: <b>{user.group.name}</b>\n"
+        f"📅 <b>{get_russian_date()}</b>\n"
+        f"🔢 Пара <b>{index + 1} из {len(lessons)}</b>\n\n"
+        f"{lesson_text}"
+    )
+
+
+async def process_next_lesson(
+        message: Message,
+        user: UserSchema,
+        state: FSMContext,
+        *,
+        selected_index: int | None = None,
+):
+    if user.group is None:
+        return await process_user_timetable(message, user, state, new=True)
+
+    client = PalladaClient()
+    timetable = await client._get_timetable(user.group.name)
+    timetable = client.user_timetable(user, timetable)
+
+    if not timetable:
+        return await message.edit_text(
+            "Расписание сейчас недоступно 😬",
+            reply_markup=main_menu_kb,
+        )
+
+    day = get_today(timetable)
+    if day is None:
+        return await message.edit_text(
+            "❌ Не удалось определить расписание на сегодня",
+            reply_markup=main_menu_kb,
+        )
+
+    lessons = get_day_lessons(day)
+    if not lessons:
+        return await message.edit_text(
+            "❌ На сегодня занятий нет",
+            reply_markup=main_menu_kb,
+        )
+
+    if selected_index is None:
+        current_index, status = get_relevant_lesson_index(lessons)
+        title = f"{status}\n"
+    else:
+        current_index = max(0, min(selected_index, len(lessons) - 1))
+        title = "⏭ <b>Навигация по парам</b>\n"
+
+    await message.edit_text(
+        build_next_lesson_text(user, day, lessons, current_index, title),
+        reply_markup=create_next_lesson_kb(current_index, len(lessons)),
+    )
+
+
 @router.callback_query(TimetableCallback.filter(F.action == "tomorrow"))
 async def get_tomorrow_callback(
         callback: CallbackQuery,
@@ -130,6 +212,21 @@ async def get_tomorrow_callback(
     await callback.message.edit_text(
         format_edited_message(timetable, callback_data.updated),
         reply_markup=create_tt_kb(callback_data)
+    )
+
+
+@router.callback_query(TimetableCallback.filter(F.action == "next_lesson"))
+async def get_next_lesson_callback(
+        callback: CallbackQuery,
+        callback_data: TimetableCallback,
+        state: FSMContext,
+):
+    user = await UserService().get_user_by_tg_id(callback.from_user.id)
+    await process_next_lesson(
+        callback.message,
+        user,
+        state,
+        selected_index=callback_data.n,
     )
 
 @router.callback_query(TimetableCallback.filter(F.action == "week"))
@@ -168,12 +265,19 @@ async def get_week(
     elif callback_data.day:
         day = [day for day in week_timetable.days if day.name == callback_data.day][0]
         await callback.message.edit_text(
-            format_edited_message(f"🕘 {callback_data.n+1}-я Неделя, "+format_day(day).replace("📅", ""), callback_data.updated),
+            format_edited_message(
+                f"🕘 {format_week_title(callback_data.n)}, "
+                + format_day(day).replace("📅", ""),
+                callback_data.updated,
+            ),
             reply_markup=create_week_kb(week_timetable, callback_data)
         )
     else:
         await callback.message.edit_text(
-            format_edited_message(f"📅 Расписание на {week_timetable.number+1}-ю Неделю  ", callback_data.updated),
+            format_edited_message(
+                f"📅 Расписание на {format_week_title(week_timetable.number)}",
+                callback_data.updated,
+            ),
             reply_markup=create_week_kb(week_timetable, callback_data)
         )
 

@@ -8,7 +8,7 @@ try:
 except Exception:  # redis is optional (no-redis mode)
     aioredis = None
 
-from app.client.formatter import format_day,  weekdays
+from app.client.formatter import format_day, format_week_title, weekdays
 from app.client.parser import parse_timetable
 from app.client.serialize import TimeTableResponse, Week, Day
 from app.db.user import UserService, UserSchema
@@ -82,6 +82,15 @@ def get_tomorrow(tt: TimeTableResponse) -> Day | None:
         return None
 
     return next((day for day in week.days if day.name == weekdays[tomorrow]), None)
+
+
+def get_tomorrow_week(tt: TimeTableResponse) -> Week | None:
+    tomorrow = datetime.now().weekday() + 1
+
+    if tomorrow == 7:
+        return next((week for week in tt.weeks if not week.current), None)
+
+    return get_current_week(tt)
 
 
 START_PARSE_GROUP_ID = 13_000
@@ -302,11 +311,17 @@ class PalladaClient:
             return "Расписание сейчас недоступно 😬"
 
         today = get_today(timetable)
+        current_week = get_current_week(timetable)
 
         if not today or not self.day_have_lessons(today):
             return "❌ На сегодняшний день занятий нет"
 
-        return format_day(today, today=True)
+        week_line = (
+            f"🗓 <b>{format_week_title(current_week.number)}</b>\n\n"
+            if current_week is not None
+            else ""
+        )
+        return week_line + format_day(today, today=True)
 
     def day_have_lessons(self, day: Day) -> bool:
         for lesson in day.lessons:
@@ -323,9 +338,15 @@ class PalladaClient:
             return "Расписание сейчас недоступно 😬"
 
         tomorrow = get_tomorrow(timetable)
+        tomorrow_week = get_tomorrow_week(timetable)
 
         if not tomorrow or not self.day_have_lessons(tomorrow):
             return "❌ На завтрашний день занятий нет"
 
-        return format_day(tomorrow)
+        week_line = (
+            f"🗓 <b>{format_week_title(tomorrow_week.number)}</b>\n\n"
+            if tomorrow_week is not None
+            else ""
+        )
+        return week_line + format_day(tomorrow)
 

@@ -1,16 +1,18 @@
 import re
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from app.client.serialize import (Day, Lesson, SubLesson, TimeTableResponse,
-                                  Week)
-from datetime import datetime
+from app.client.serialize import Day, Lesson, SubLesson, TimeTableResponse, Week
+from app.settings import bot_settings
+
 
 def format_place(place: str) -> str:
     to_remove = ["корп.", "каб.", '"']
     for i in to_remove:
         place = place.replace(i, "")
     return place
+
 
 def parse_timetable(timetable_html) -> TimeTableResponse:
     bs = BeautifulSoup(timetable_html, "lxml")
@@ -20,15 +22,15 @@ def parse_timetable(timetable_html) -> TimeTableResponse:
     lines = [line.strip() for line in h3_element.stripped_strings]
     group_name = lines[0].strip('"')
 
-    weeks = bs.find_all("div", id=re.compile(r'^week_\d+_tab'))
+    weeks = bs.find_all("div", id=re.compile(r"^week_\d+_tab"))
 
-    week_tab = [week.parent.get("class") for week in bs.find_all(
-        "a",
-        attrs={
-            "data-toggle": "tab",
-            "href": re.compile(r'#week_\d+_tab')
-        }
-    )]
+    week_tab = [
+        week.parent.get("class")
+        for week in bs.find_all(
+            "a",
+            attrs={"data-toggle": "tab", "href": re.compile(r"#week_\d+_tab")},
+        )
+    ]
 
     current_week = 0
 
@@ -49,16 +51,16 @@ def parse_timetable(timetable_html) -> TimeTableResponse:
             day = Day(name=title[0])
 
             for lesson in lessons:
-                start, end = (time.strip() for time in
-                    lesson.find("div", class_="time").find("div", class_="visible-xs").contents
+                start, end = (
+                    time.strip()
+                    for time in lesson.find("div", class_="time").find("div", class_="visible-xs").contents
                     if isinstance(time, str)
                 )
 
                 sub_lessons = (
-                    lesson.
-                    find("div", class_="discipline").
-                    find("div", class_="row").
-                    find_all("div", class_=re.compile("col-md"))
+                    lesson.find("div", class_="discipline")
+                    .find("div", class_="row")
+                    .find_all("div", class_=re.compile("col-md"))
                 )
                 lesson = Lesson(start=start, end=end)
                 for row in sub_lessons:
@@ -68,19 +70,32 @@ def parse_timetable(timetable_html) -> TimeTableResponse:
                     elements = ul.find_all("li")
 
                     if len(elements) == 4:
-                        subgroup = (ul.find("li", class_="bold num_pdgrp")
-                                    or ul.find("i", class_="fa fa-paperclip").parent)
+                        subgroup = ul.find("li", class_="bold num_pdgrp") or ul.find(
+                            "i", class_="fa fa-paperclip"
+                        ).parent
                         subgroup = subgroup.text.split()[0]
 
                     name = ul.find("span", class_="name").text
                     type_ = ul.find("i", class_="fa fa-bookmark").parent.contents[2].text.strip()[1:-1]
-                    teacher = ul.find("i", class_="fa fa-user").next_element.text
+                    teacher_link = ul.find("a", href=re.compile(r"/timetable/professor/\d+"))
+                    teacher_icon = ul.find("i", class_="fa fa-user")
+                    teacher = ""
+                    if teacher_link is not None:
+                        teacher = teacher_link.get_text(" ", strip=True)
+                    elif teacher_icon is not None:
+                        teacher = teacher_icon.parent.get_text(" ", strip=True)
+                    teacher_url = None
+                    if teacher_link and teacher_link.get("href"):
+                        teacher_url = urljoin(f"{bot_settings.timetable_url}/", teacher_link["href"])
                     place = ul.find("i", class_="fa fa-compass").next_element.text
 
-
                     sub_lesson = SubLesson(
-                        name=name, type=type_, teacher=teacher,
-                        place=format_place(place), subgroup=subgroup
+                        name=name,
+                        type=type_,
+                        teacher=teacher,
+                        teacher_url=teacher_url,
+                        place=format_place(place),
+                        subgroup=subgroup,
                     )
 
                     lesson.sub_lessons.append(sub_lesson)
@@ -89,5 +104,3 @@ def parse_timetable(timetable_html) -> TimeTableResponse:
         timetable.weeks.append(week)
 
     return timetable
-
-
