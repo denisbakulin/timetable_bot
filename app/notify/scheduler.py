@@ -56,16 +56,25 @@ class NotificationManager:
                 id=str(user.tg_id), replace_existing=True
             )
 
-        # парсит расписание для зарегистрированных пользователей
+        # Подсос расписаний:
+        # - группы с пользователями: ежедневно ночью
+        # - группы без пользователей: раз в неделю ночью
         scheduler.add_job(
             PalladaClient().update_timetable_task(),
-            "cron", hour=7,
+            "cron",
+            hour=3,
+            minute=10,
+            id="tt-refresh-active",
+            replace_existing=True,
         )
-
-        # парсит расписание всех групп
         scheduler.add_job(
-            PalladaClient().update_timetable_task(all_=True),
-            "cron", hour=6, day_of_week="mon"
+            PalladaClient().update_timetable_task(inactive=True),
+            "cron",
+            day_of_week="mon",
+            hour=4,
+            minute=10,
+            id="tt-refresh-inactive",
+            replace_existing=True,
         )
 
         scheduler.start()

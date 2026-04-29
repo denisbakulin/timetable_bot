@@ -1,8 +1,12 @@
 import asyncio
 from json import loads
 
-from httpx import AsyncClient, ConnectError
-from redis import asyncio as aioredis
+from httpx import AsyncClient, HTTPError
+
+try:
+    from redis import asyncio as aioredis  # type: ignore
+except Exception:  # redis is optional (no-redis mode)
+    aioredis = None
 
 from app.client.formatter import format_day,  weekdays
 from app.client.parser import parse_timetable
@@ -12,14 +16,33 @@ from app.db.group import GroupService
 
 
 from app.settings import bot_settings
+from app.utils.proxy import normalize_proxy
 from datetime import datetime
 
 
-cache = aioredis.from_url(
-    url=bot_settings.cache_url,
-    port=bot_settings.cache_port,
-    decode_responses=True
-)
+class _NullCache:
+    async def get(self, key: str):  # noqa: ANN001
+        return None
+
+    async def set(self, key: str, value: str, ex: int | None = None):  # noqa: ANN001
+        return None
+
+
+def _build_cache():
+    if aioredis is None:
+        return _NullCache()
+
+    if not bot_settings.cache_url:
+        return _NullCache()
+
+    try:
+        # Prefer full URL (e.g. redis://localhost:6379/0). Port in URL is enough.
+        return aioredis.from_url(bot_settings.cache_url, decode_responses=True)
+    except Exception:
+        return _NullCache()
+
+
+cache = _build_cache()
 
 
 
@@ -65,6 +88,13 @@ END_PARSE_GROUP_ID = 15_000
 
 class PalladaClient:
 
+    def _make_client(self) -> AsyncClient:
+        # Explicit proxy config: we only proxy requests to Pallada, not Telegram.
+        return AsyncClient(
+            base_url=bot_settings.timetable_url,
+            proxy=normalize_proxy(bot_settings.timetable_proxy),
+            follow_redirects=True,
+        )
 
 
     @staticmethod
@@ -82,36 +112,100 @@ class PalladaClient:
             params: dict | None = None,
             client: AsyncClient | None = None
     ):
-        if client is None:
-            client = AsyncClient()
-        client.base_url = bot_settings.timetable_url
+        uri = uri.lstrip("/")  # keep relative to /timetable
 
-        if params is not None:
-            client.params = params
+        own_client = client is None
+        if own_client:
+            client = self._make_client()
         try:
-            async with client as client:
-                request_ = await client.get(uri)
-                if request_.status_code != 200:
-                    return None
+            request_ = await client.get(uri, params=params)
+            if request_.status_code != 200:
+                return None
+            return request_
+        except HTTPError:
+            return None
+        finally:
+            if own_client:
+                await client.aclose()
 
-                return request_
-
-        except ConnectError as e:
+    async def _refresh_group_timetable(self, group_name: str) -> TimeTableResponse | None:
+        group_name = group_name.upper()
+        group = await GroupService().get_one_by(name=group_name)
+        if group is None:
             return None
 
-        except Exception as e:
+        res = await self.request(f"group/{group.pallada_id}")
+        if res is None:
             return None
 
-    def update_timetable_task(self, all_: bool = False):
+        try:
+            parsed = parse_timetable(res.text)
+        except Exception:
+            return None
+        timetable_json = parsed.model_dump_json()
+
+        await GroupService().update(group.id, timetable=timetable_json)
+        try:
+            await cache.set(group_name, timetable_json, ex=bot_settings.timetable_update_time_seconds)
+        except Exception:
+            pass
+        return parsed
+
+    async def refresh_group_by_pallada_id(self, pallada_id: int) -> TimeTableResponse | None:
+        """
+        Fetch timetable from site by pallada_id, upsert Group row (name + timetable),
+        and update cache snapshot.
+        """
+        res = await self.request(f"group/{pallada_id}")
+        if res is None:
+            return None
+
+        try:
+            parsed = parse_timetable(res.text)
+        except Exception:
+            return None
+
+        timetable_json = parsed.model_dump_json()
+        group_service = GroupService()
+
+        group_by_pid = await group_service.get_one_by(pallada_id=pallada_id)
+        group_by_name = await group_service.get_one_by(name=parsed.group_name)
+
+        if group_by_pid is not None:
+            await group_service.update(group_by_pid.id, name=parsed.group_name, timetable=timetable_json)
+        elif group_by_name is not None:
+            # Name is the main key used by the bot in many places; keep it consistent.
+            await group_service.update(group_by_name.id, pallada_id=pallada_id, timetable=timetable_json)
+        else:
+            await group_service.create(pallada_id=pallada_id, name=parsed.group_name, timetable=timetable_json)
+
+        try:
+            await cache.set(parsed.group_name.upper(), timetable_json, ex=bot_settings.timetable_update_time_seconds)
+        except Exception:
+            pass
+
+        return parsed
+
+    def update_timetable_task(self, all_: bool = False, inactive: bool = False):
         async def wrapper():
-            if all_:
+            # Returns tuples: (group_name, users_count)
+            active = await UserService().get_user_groups()
+            active = [group_name for group_name, _ in active]
+
+            if inactive:
+                all_groups = await GroupService().get_any_by()
+                all_groups = [g.name for g in all_groups]
+                active_set = set(active)
+                groups = [g for g in all_groups if g not in active_set]
+            elif all_:
                 groups = await GroupService().get_any_by()
                 groups = [group.name for group in groups]
             else:
-                groups = await UserService().get_user_groups()
+                groups = active
 
             for group in groups:
-                await self._get_timetable(group, set_cache=not all_)
+                # Force refresh from Pallada so the DB/Redis stay up-to-date.
+                await self._get_timetable(group, force_refresh=True)
                 await asyncio.sleep(1)
         return wrapper
 
@@ -136,39 +230,56 @@ class PalladaClient:
 
 
 
-    async def _get_timetable(self, group_name: str, set_cache: bool = False) -> TimeTableResponse | None:
+    async def _get_timetable(self, group_name: str, force_refresh: bool = False) -> TimeTableResponse | None:
         group_name = group_name.upper()
-        cached = await cache.get(group_name)
+        try:
+            cached = await cache.get(group_name)
+        except Exception:
+            cached = None
 
-        if cached and not set_cache:
+        # 1) Cache
+        if cached and not force_refresh:
             return TimeTableResponse(**loads(cached))
 
         group = await GroupService().get_one_by(name=group_name)
 
-        if not group or not group.timetable:
+        if not group:
             return None
 
-        if set_cache:
-            await cache.set(
-                group_name, group.timetable,
-                ex=bot_settings.timetable_update_time_seconds
-            )
+        # 2) DB snapshot (populate cache for next time)
+        if group.timetable and not force_refresh:
+            try:
+                await cache.set(group_name, group.timetable, ex=bot_settings.timetable_update_time_seconds)
+            except Exception:
+                pass
+            return TimeTableResponse(**loads(group.timetable))
 
-        return TimeTableResponse(**loads(group.timetable))
+        # 3) Site (only if DB is empty or we force refresh)
+        refreshed = await self._refresh_group_timetable(group_name)
+        if refreshed is not None:
+            return refreshed
+
+        # If we couldn't refresh from the site, fall back to DB if any.
+        if group.timetable:
+            return TimeTableResponse(**loads(group.timetable))
+        return None
 
 
     async def setup_groups(self, start_group_id: int, end_group_id: int):
 
         for group_id in range(start_group_id, end_group_id):
-            client = AsyncClient()
-            res = await self.request(f"/group/{group_id}", client=client)
+            res = await self.request(f"group/{group_id}")
 
             if res is not None:
 
                 group_service = GroupService()
                 group = await group_service.get_one_by(pallada_id=group_id)
 
-                parse = parse_timetable(res.text)
+                try:
+                    parse = parse_timetable(res.text)
+                except Exception:
+                    await asyncio.sleep(0.5)
+                    continue
 
                 if group is None:
                     await group_service.create(pallada_id=group_id, name=parse.group_name)

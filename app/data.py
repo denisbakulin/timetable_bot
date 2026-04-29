@@ -59,8 +59,23 @@ SETTINGS_TEXT = (
 
 ADMIN_TEXT = (
     "Админ Панель\n"
-    "/dist - отправить рассылку\n"
-    "/users - распределение пользователей"
+    "/admin_help - подсказка по админским командам\n"
+    "/proxy - текущий прокси (или установить)\n"
+    "/add_group - добавить/обновить группу по pallada id"
+)
+
+
+ADMIN_HELP_TEXT = (
+    "🛠 <b>Админские команды</b>\n\n"
+    "<b>/proxy</b>\n"
+    "• показать текущий: <code>/proxy</code>\n"
+    "• установить: <code>/proxy 212.113.107.128:36613</code>\n"
+    "• выключить: <code>/proxy off</code>\n\n"
+    "<b>/add_group</b>\n"
+    "• один id: <code>/add_group 13887</code>\n"
+    "• диапазон: <code>/add_group 13887-13910</code>\n"
+    "• с именем (имя опционально): <code>/add_group БИЭ24-01 13900</code>\n\n"
+    "<b>/admin</b> — короткое меню\n"
 )
 
 ABOUT_TEXT = (
