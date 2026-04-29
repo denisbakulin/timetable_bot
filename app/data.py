@@ -61,7 +61,18 @@ ADMIN_TEXT = (
     "Админ Панель\n"
     "/admin_help - подсказка по админским командам\n"
     "/proxy - текущий прокси (или установить)\n"
-    "/add_group - добавить/обновить группу по pallada id"
+    "/add_group - добавить/обновить группу по pallada id\n"
+    "/refresh_group - обновить группу по pallada id\n"
+    "/admin_stats - статистика\n"
+    "/admin_users - группы по пользователям\n"
+    "/admin_groups - интерактив: группы/пользователи\n"
+    "/whereami - chat_id/thread_id\n"
+    "/health - проверки\n"
+    "/dump_config - конфиг\n"
+    "/last_refresh - последнее обновление группы\n"
+    "/set_cache_ttl - TTL кеша\n"
+    "/ban_user, /unban_user\n"
+    "/broadcast, /broadcast_all, /broadcast_group"
 )
 
 
@@ -75,6 +86,19 @@ ADMIN_HELP_TEXT = (
     "• один id: <code>/add_group 13887</code>\n"
     "• диапазон: <code>/add_group 13887-13910</code>\n"
     "• с именем (имя опционально): <code>/add_group БИЭ24-01 13900</code>\n\n"
+    "<b>/refresh_group</b>\n"
+    "• обновить id/диапазон: <code>/refresh_group 13887-13910</code>\n\n"
+    "<b>/admin_stats</b> — статистика по пользователям/группам\n"
+    "<b>/admin_users</b> — топ групп по числу пользователей\n\n"
+    "<b>/admin_groups</b> — интерактивный список групп и пользователей\n"
+    "<b>/group_stats</b> — статистика по группе\n\n"
+    "<b>/whereami</b> — показать chat_id и thread_id\n"
+    "<b>/health</b> — проверить SQLite/Redis/Pallada\n"
+    "<b>/dump_config</b> — вывести текущий конфиг\n"
+    "<b>/set_cache_ttl</b> — установить TTL кеша\n"
+    "<b>/last_refresh</b> — последнее обновление группы\n"
+    "<b>/ban_user</b>, <b>/unban_user</b>\n"
+    "<b>/broadcast</b>, <b>/broadcast_all</b>, <b>/broadcast_group</b>\n\n"
     "<b>/admin</b> — короткое меню\n"
 )
 
@@ -86,12 +110,6 @@ ABOUT_TEXT = (
     '• <a href="https://pypi.org/project/aiogram/">Aiogram</a> - Telegram Bot API\n'
     '• <a href="https://pypi.org/project/beautifulsoup4/">Beautiful Soup 4</a> - парсинг HTML\n'
     '• <a href="https://pypi.org/project/APScheduler/">APScheduler</a> - уведомления / отложенные задачи\n\n'
-
-    
-    "🚀 <b>Преимущества:</b>\n"
-    "• Мгновенное обновление расписания без задержек официального сайта\n"
-    "• Работает с VPN\n"
-    "• Удобный интерфейс\n\n"
     
     "📮 <b>Обратная связь</b>\n"
     "Нашли ошибку? Есть предложения?\n"

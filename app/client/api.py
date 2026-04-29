@@ -13,6 +13,7 @@ from app.client.parser import parse_timetable
 from app.client.serialize import TimeTableResponse, Week, Day
 from app.db.user import UserService, UserSchema
 from app.db.group import GroupService
+from app.db.group_refresh import GroupRefreshService
 
 
 from app.settings import bot_settings
@@ -136,11 +137,13 @@ class PalladaClient:
 
         res = await self.request(f"group/{group.pallada_id}")
         if res is None:
+            await GroupRefreshService().mark(group.pallada_id, ok=False, error="HTTPError/empty response")
             return None
 
         try:
             parsed = parse_timetable(res.text)
         except Exception:
+            await GroupRefreshService().mark(group.pallada_id, ok=False, error="parse error")
             return None
         timetable_json = parsed.model_dump_json()
 
@@ -149,6 +152,7 @@ class PalladaClient:
             await cache.set(group_name, timetable_json, ex=bot_settings.timetable_update_time_seconds)
         except Exception:
             pass
+        await GroupRefreshService().mark(group.pallada_id, ok=True)
         return parsed
 
     async def refresh_group_by_pallada_id(self, pallada_id: int) -> TimeTableResponse | None:
@@ -158,11 +162,13 @@ class PalladaClient:
         """
         res = await self.request(f"group/{pallada_id}")
         if res is None:
+            await GroupRefreshService().mark(pallada_id, ok=False, error="HTTPError/empty response")
             return None
 
         try:
             parsed = parse_timetable(res.text)
         except Exception:
+            await GroupRefreshService().mark(pallada_id, ok=False, error="parse error")
             return None
 
         timetable_json = parsed.model_dump_json()
@@ -183,6 +189,7 @@ class PalladaClient:
             await cache.set(parsed.group_name.upper(), timetable_json, ex=bot_settings.timetable_update_time_seconds)
         except Exception:
             pass
+        await GroupRefreshService().mark(pallada_id, ok=True)
 
         return parsed
 

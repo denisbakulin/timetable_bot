@@ -6,8 +6,8 @@ from aiogram.types import CallbackQuery, Message
 class IsAdminFilter(BaseFilter):
     """Проверка на администратора"""
 
-    async def __call__(self, message: Message, bot: Bot) -> bool:
-        return message.from_user.id in bot.admins
+    async def __call__(self, event: Message | CallbackQuery, bot: Bot) -> bool:
+        return event.from_user.id in bot.admins
 
 
 class AnswerCallback(BaseFilter):

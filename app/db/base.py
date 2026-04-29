@@ -75,6 +75,10 @@ class BaseRepository(Generic[M]):
             setattr(item, key, value)
         return await self.save(item)
 
+    async def delete(self, item: M) -> None:
+        await self.session.delete(item)
+        await self.session.commit()
+
 
 
 
@@ -123,6 +127,13 @@ class BaseService(Generic[M, R, S]):
             item = await repo.get_one_by(id=item_id)
             updated_item = await repo.update(item, **updates)
             return self.serialize(updated_item)
+
+    async def delete(self, item_id: int) -> None:
+        async with self.with_repo() as repo:
+            item = await repo.get_one_by(id=item_id)
+            if item is None:
+                return
+            await repo.delete(item)
 
 
 async def init_db():

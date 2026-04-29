@@ -12,6 +12,10 @@ cmd_list = [
     ("/menu", "Главное меню"),
     ("/today", "Расписание на сегодня"),
     ("/tomorrow", "Расписание на завтра"),
+    ("/help", "Помощь"),
+    ("/feedback", "Обратная связь"),
+    ("/about", "О проекте"),
+    ("/admin_help", "Админ: помощь"),
 ]
 
 cmd_menu = [
@@ -173,3 +177,61 @@ def create_settings_kb(user):
             [InlineKeyboardButton(text="« Назад", callback_data="menu")]
         ]
     )
+
+
+class AdminGroupsCallback(CallbackData, prefix="admin_groups"):
+    page: int
+
+
+class AdminGroupUsersCallback(CallbackData, prefix="admin_group_users"):
+    pallada_id: int
+    page: int = 0
+
+
+def create_admin_groups_kb(*, page: int, total: int, page_size: int, rows) -> InlineKeyboardMarkup:
+    buttons = []
+    for pid, name, cnt in rows:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{name} ({cnt})",
+                    callback_data=AdminGroupUsersCallback(pallada_id=int(pid), page=0).pack(),
+                )
+            ]
+        )
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="«", callback_data=AdminGroupsCallback(page=page - 1).pack()))
+    if (page + 1) * page_size < total:
+        nav.append(InlineKeyboardButton(text="»", callback_data=AdminGroupsCallback(page=page + 1).pack()))
+    if nav:
+        buttons.append(nav)
+
+    if not buttons:
+        buttons = [[InlineKeyboardButton(text="« Назад", callback_data="menu")]]
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def create_admin_group_users_kb(*, pallada_id: int, page: int, total: int, page_size: int) -> InlineKeyboardMarkup:
+    kb = [[InlineKeyboardButton(text="← К группам", callback_data=AdminGroupsCallback(page=0).pack())]]
+
+    nav = []
+    if page > 0:
+        nav.append(
+            InlineKeyboardButton(
+                text="«",
+                callback_data=AdminGroupUsersCallback(pallada_id=pallada_id, page=page - 1).pack(),
+            )
+        )
+    if (page + 1) * page_size < total:
+        nav.append(
+            InlineKeyboardButton(
+                text="»",
+                callback_data=AdminGroupUsersCallback(pallada_id=pallada_id, page=page + 1).pack(),
+            )
+        )
+    if nav:
+        kb.append(nav)
+    return InlineKeyboardMarkup(inline_keyboard=kb)

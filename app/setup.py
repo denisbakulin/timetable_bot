@@ -4,10 +4,13 @@ from aiogram import Bot, Dispatcher
 from app.client.api import PalladaClient
 from app.db.base import init_db
 from app.db.config import AppConfigService  # registers model for create_all
+from app.db.ban import BanService  # registers model for create_all
+from app.db.group_refresh import GroupRefreshService  # registers model for create_all
 
 from app.filters.default import AnswerCallback
 from app.notify.scheduler import notification_manager
 from app.utils.proxy import normalize_proxy
+from app.middlewares.ban import BanMiddleware
 
 
 
@@ -23,6 +26,7 @@ async def setup(dp: Dispatcher, bot: Bot):
     from app.handlers.start import router as start_router
     from app.handlers.timetable import router as timetable_router
     from app.handlers.proxy import router as proxy_router
+    from app.handlers.admin_extra import router as admin_extra_router
     from app.settings import bot_settings
     from app.keyboards.kb import cmd_menu
 
@@ -30,6 +34,7 @@ async def setup(dp: Dispatcher, bot: Bot):
 
     dp.include_routers(
         admin_router,
+        admin_extra_router,
         feedback_router,
         help_router,
         menu_router,
@@ -44,6 +49,8 @@ async def setup(dp: Dispatcher, bot: Bot):
 
     #Отвечает на все калбеки
     dp.callback_query.filter(AnswerCallback())
+    dp.message.middleware(BanMiddleware())
+    dp.callback_query.middleware(BanMiddleware())
 
     from app.db.group import Group
     from app.db.user import User
@@ -54,6 +61,10 @@ async def setup(dp: Dispatcher, bot: Bot):
     # Load saved runtime config from SQLite (survives restarts).
     saved_proxy = await AppConfigService().get_value("timetable_proxy")
     bot_settings.timetable_proxy = normalize_proxy(saved_proxy)
+
+    saved_ttl = await AppConfigService().get_value("timetable_update_time_seconds")
+    if saved_ttl and saved_ttl.isdigit():
+        bot_settings.timetable_update_time_seconds = int(saved_ttl)
 
     # Не блокируем запуск бота долгим первичным парсингом списка групп.
     asyncio.create_task(PalladaClient.init())
