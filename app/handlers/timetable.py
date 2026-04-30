@@ -125,6 +125,17 @@ def get_day_lessons(day) -> list:
     return [lesson for lesson in day.lessons if lesson.sub_lessons]
 
 
+def get_lesson_datetimes(lesson, now: datetime | None = None) -> tuple[datetime, datetime]:
+    now = now or datetime.now()
+    lesson_date = now.date()
+    start_time = datetime.strptime(lesson.start, "%H:%M").time()
+    end_time = datetime.strptime(lesson.end, "%H:%M").time()
+    return (
+        datetime.combine(lesson_date, start_time),
+        datetime.combine(lesson_date, end_time),
+    )
+
+
 def get_relevant_lesson_index(lessons: list) -> tuple[int, str]:
     now = datetime.now().time()
 
@@ -140,15 +151,45 @@ def get_relevant_lesson_index(lessons: list) -> tuple[int, str]:
     return len(lessons) - 1, "✅ На сегодня пары закончились"
 
 
+def build_lesson_progress_text(lesson) -> str:
+    now = datetime.now()
+    start_dt, end_dt = get_lesson_datetimes(lesson, now)
+
+    if not (start_dt <= now <= end_dt):
+        return ""
+
+    total_seconds = max(int((end_dt - start_dt).total_seconds()), 1)
+    elapsed_seconds = min(max(int((now - start_dt).total_seconds()), 0), total_seconds)
+    remaining_seconds = total_seconds - elapsed_seconds
+    progress_ratio = elapsed_seconds / total_seconds
+
+    total_minutes = max(total_seconds // 60, 1)
+    elapsed_minutes = elapsed_seconds // 60
+    remaining_minutes = remaining_seconds // 60
+
+    bar_size = 10
+    filled = min(max(round(progress_ratio * bar_size), 0), bar_size)
+    progress_bar = "█" * filled + "░" * (bar_size - filled)
+    progress_percent = round(progress_ratio * 100)
+
+    return (
+        f"{progress_bar} {progress_percent}%\n"
+        f"Прошло: <b>{elapsed_minutes}</b> из <b>{total_minutes}</b> мин\n"
+        f"Осталось: <b>{remaining_minutes}</b> мин\n\n"
+    )
+
+
 def build_next_lesson_text(user: UserSchema, day, lessons: list, index: int, title: str) -> str:
     lesson = lessons[index]
     lesson_text = format_lesson(lesson)
+    progress_text = build_lesson_progress_text(lesson)
 
     return (
         f"{title}\n"
         f"👥 Группа: <b>{user.group.name}</b>\n"
         f"📅 <b>{get_russian_date()}</b>\n"
         f"🔢 Пара <b>{index + 1} из {len(lessons)}</b>\n\n"
+        f"{progress_text}"
         f"{lesson_text}"
     )
 
